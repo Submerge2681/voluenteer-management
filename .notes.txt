@@ -1,0 +1,50 @@
+xxxxx consider shifting @supabase/ssr to middleware
+xxxxx   currently used in lib/superbase/server.ts
+
+xxxxx need to switch to secret key instead of service role keys
+xxxxx   used by app/api/cron/stats/route.ts
+
+add total waste collected to each events schema and then calculate total waste 
+  at: app/api/cron/stats/route.ts
+  then update its values at global_stats and reflect it on the website
+
+currently all events are considered cleanups. use something like if waste collected is not null then count.
+  BTW create a column for total waste collected on the events page
+  have multiple event types?
+
+make a json of all events to load from which gets updated everytime an event is updated?
+
+for the homepage instead of reading from the db everytime have it stored in the server or cache it
+  explore linking homepage and lib cron stats.
+  let cron job run only when events are updated otherwise catche the data and pull from it directly to reduce server calls
+
+cache or store data locally events data instead of fetching it from server everytime 
+
+create a component that shows up only for admin on the events page later
+
+evaluate all cookies() and compare it to response.cookies.set
+
+user data could also be download and stored securely on the server or cached fetching data as needed only without connecting to server everytime.
+  data is updated everytime an event is created / deleted.
+  data is also updated once per day and a data integrity test is also conducted just to make sure the update process is not messed with
+  ever time user updates their data the value is updated both locally and on supeabase
+  also have a manually data option for emergencies
+
+change message colour based on message type on src/app/(auth)/login/page.tsx
+
+why do I have to log back in for admin role change to be reflected? does that mean I can spoof it?
+
+add window for otp
+
+make copy checkin link button more conspecious
+
+MAKE A UNIFIED LOCATION SELECTOR FOR EVENTS AND PROFILES
+
+reduce server calls as much as possible
+
+###
+after event closes turn it from totp to static_otp?
+  this is so that incase someone who was there can register later?
+  might be better to increase the totp window.
+  should the secret columns be purged after a while? would that reduce server load?
+how long does the event remains open?
