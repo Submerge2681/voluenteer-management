@@ -42,9 +42,47 @@ MAKE A UNIFIED LOCATION SELECTOR FOR EVENTS AND PROFILES
 
 reduce server calls as much as possible
 
+handle event thumbnail auto cropping and converting to webp
+
 ###
 after event closes turn it from totp to static_otp?
   this is so that incase someone who was there can register later?
   might be better to increase the totp window.
   should the secret columns be purged after a while? would that reduce server load?
 how long does the event remains open?
+
+
+
+------
+policy being used for buckets:
+  insert:
+    Policy Name: Allow admins to upload event thumbnails
+
+    Allowed Operations: INSERT
+
+    Target Roles: authenticated
+
+    Check expression:
+
+    SQL
+    -- This assumes your profiles table has a role column
+    (SELECT role FROM profiles WHERE id = auth.uid()) IN ('admin', 'super_admin')
+
+
+
+policy for badges table:
+  -- 1. Enable RLS on the table
+  alter table public.badges enable row level security;
+
+  -- 2. Allow everyone (even anonymous if public) to VIEW badges
+  -- Or change 'true' to 'auth.role() = 'authenticated'' for logged-in users only
+  create policy "Badges are viewable by everyone" 
+  on public.badges for select 
+  using (true);-- 1. Enable RLS on the table
+  alter table public.badges enable row level security;
+
+  -- 2. Allow everyone (even anonymous if public) to VIEW badges
+  -- Or change 'true' to 'auth.role() = 'authenticated'' for logged-in users only
+  create policy "Badges are viewable by everyone" 
+  on public.badges for select 
+  using (true);
