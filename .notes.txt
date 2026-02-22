@@ -44,6 +44,10 @@ reduce server calls as much as possible
 
 handle event thumbnail auto cropping and converting to webp
 
+create a new column for place to add before location and hyperlinking to maps and end time to calculate time spent by voluenteers and for ical
+
+have a share button like in tineb blurbs share on smaller screens, add one for reddit, mastadon should ask instance in an inline field instead of an aleart and should remember it
+
 ###
 after event closes turn it from totp to static_otp?
   this is so that incase someone who was there can register later?

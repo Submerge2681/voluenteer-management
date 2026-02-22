@@ -17,8 +17,8 @@ export default async function EventsList() {
       
       <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
         {events?.map((event) => (
-          <div key={event.id} className="flex flex-col bg-white border rounded-lg overflow-hidden shadow-sm hover:shadow-md transition">
-            <img src={event.image ? event.image : "/images/placeholder.png"} alt="Event image" />
+          <Link href={`/events/${event.id}`} key={event.id} className="flex flex-col bg-white border rounded-lg overflow-hidden shadow-sm hover:shadow-md transition">
+            <img src={event.image_url || "/images/placeholder.png"} alt="Event image" />
             
             <div className="py-2 flex-1">
               <h2 className="text-xl font-bold text-slate-900 px-4">{event.title}</h2>
@@ -34,7 +34,7 @@ export default async function EventsList() {
                     )}
                 </div>
                 <div className="flex gap-3">
-                  <div className="bg-indigo-600 text-white p-6 flex flex-col items-center justify-center max-w-[110px] shrink-0">
+                  <div className="bg-indigo-600 text-white p-6 flex flex-col items-center justify-center max-w-27.5 shrink-0">
                     <span className="text-2xl font-bold">
                       {new Date(event.start_time).getDate()}
                     </span>
@@ -50,15 +50,20 @@ export default async function EventsList() {
             </div>
 
             <div className="flex items-center bg-slate-50 border-l px-4 py-2 justify-between">
-                {/* NOTE: In a real app, this button logic would check 'participation' 
-                  to see if user already joined. 
-                */}
-                <Link href={`/events/${event.id}`} className="text-indigo-600 font-medium hover:underline">
+                <div className="text-indigo-600 font-medium hover:underline">
                     View Details &rarr;
-                </Link>
-                <img className='max-h-[50px]' src="/badges/bannerghatta.png" alt="" />
+                </div>
+                {event.badge_url ? (
+                  <img
+                    className="max-h-12.5"
+                    src={event.badge_url}
+                    alt={`Badge for ${event.title}`}
+                  />
+                ) : (
+                <div className="max-h-12.5 h-12.5"></div>
+              )}
             </div>
-          </div>
+          </Link>
         ))}
       </div>
     </div>

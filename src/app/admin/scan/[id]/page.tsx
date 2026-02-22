@@ -1,91 +1,63 @@
-'use client';
-import { useState, useEffect, use } from 'react';
-import { generate } from 'otplib';
-import { useQRCode } from 'next-qrcode'; // Hypothetical wrapper or use 'qrcode.react'
+import { createClient } from '@/lib/supabase/server';
+import { notFound, redirect } from 'next/navigation';
+import { NextResponse, type NextRequest } from 'next/server'
+import { AlertCircle } from 'lucide-react';
+import AdminCheckinManager from './AdminCheckinManager';
 
-export default function AdminQRDisplay({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params);
-  const [token, setToken] = useState('');
-  const [timeLeft, setTimeLeft] = useState(30);
-  const [secret, setSecret] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const { Canvas } = useQRCode();
+export default async function EventDetailsPage({ params }: { params: { id: string } }) {
+  const { id } = await params;
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
 
-  // 1. Fetch Event Secret on Mount (Protected by RLS in real app)
-  useEffect(() => {
-    async function fetchSecret() {
-      try {
-        const res = await fetch(`/api/events/${id}/secret`);
-        if (!res.ok) {
-          throw new Error(`Failed to fetch secret: ${res.status}`);
-        }
-        const data = await res.json();
-        setSecret(data.secret);
-      } catch (err) {
-        setError((err as Error).message);
-      }
-    }
-    fetchSecret();
-  }, [id]);
+  let isAdmin = false;
+  if (!user) {
+    return redirect('/')
+  }
+  else {
+    const { data } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .single();
+    isAdmin = data?.role === "admin" || data?.role === "super_admin";
+  }
 
-  // 2. TOTP Tick Loop
-  useEffect(() => {
-    if (!secret) return;
+  const eventRes = await supabase.from('events').select('*').eq('id', id).single();
 
-    const update = async () => {
-      try {
-        const newToken = await generate({ secret });
-        setToken(newToken);
-      } catch (err) {
-        console.error('Error generating token:', err);
-        // Optionally set error state
-      }
-
-      const now = Date.now() / 1000;
-      const timeUsed = Math.floor(now) % 30;
-      setTimeLeft(30 - timeUsed);
-    };
-
-    update(); // Initial update
-    const interval = setInterval(update, 1000);
-
-    return () => clearInterval(interval);
-  }, [secret]);
-
-  if (error) return <div>Error: {error}</div>;
-  if (!secret) return <div>Loading Secure Channel...</div>;
+  if (eventRes.error || !eventRes.data) notFound();
+  
+  const event = eventRes.data;
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-black text-white">
-      <h2 className="text-2xl font-bold mb-8">Scan to Check-In</h2>
-      
-      <div className="p-4 bg-white rounded-xl">
-        {/* The QR contains the URL to the checkin API with the token */}
-        {/* Format: https://site.com/events/checkin/TOKEN?event_id=ID */}
-        <Canvas
-          text={`${process.env.NEXT_PUBLIC_APP_URL}/checkin/${token}?event_id=${id}`}
-          options={{
-            errorCorrectionLevel: 'M',
-            margin: 3,
-            scale: 4,
-            width: 300,
-          }}
-        />
-      </div>
+    <>
+      {/* Admin Zone: QR & TOTP Manager */}
+      {isAdmin && (
+        <div className='flex justify-center'>
+          <div className="bg-slate-900 rounded-xl p-8 text-white shadow-xl overflow-hidden relative w-6xl">
+            <div className="absolute top-0 right-0 p-4 opacity-10">
+              <AlertCircle className="w-32 h-32" />
+            </div>
+            
+            <div className="relative z-10">
+              <div className="mb-6 border-b border-slate-700 pb-4">
+                <h2 className="text-xl font-bold flex items-center gap-2">
+                  <span className="bg-indigo-500 w-2 h-2 rounded-full animate-pulse"/>
+                  Admin Control Center
+                </h2>
+                <p className="text-slate-400 text-sm mt-1">
+                  Only visible to admins. Use this to check in volunteers.
+                </p>
+              </div>
 
-      <div className="mt-8 text-center">
-        <p className="text-gray-400 uppercase tracking-widest text-xs">Current PIN</p>
-        <p className="text-4xl font-mono font-bold tracking-[0.5em] text-indigo-400">
-          {token}
-        </p>
-      </div>
-
-      <div className="mt-4 w-64 h-2 bg-gray-800 rounded-full overflow-hidden">
-        <div 
-            className="h-full bg-indigo-500 transition-all duration-1000 ease-linear"
-            style={{ width: `${(timeLeft / 30) * 100}%` }}
-        />
-      </div>
-    </div>
+              <AdminCheckinManager 
+                eventId={event.id}
+                secret={event.checkin_secret}
+                type={event.checkin_type}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }

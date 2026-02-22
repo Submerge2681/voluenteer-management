@@ -29,6 +29,9 @@ importers:
       '@supabase/supabase-js':
         specifier: ^2.94.0
         version: 2.94.0
+      add-to-calendar-button-react:
+        specifier: ^2.13.8
+        version: 2.13.8(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
       lucide-react:
         specifier: ^0.563.0
         version: 0.563.0(react@19.2.3)
@@ -857,6 +860,17 @@ packages:
     resolution: {integrity: sha512-NZyJarBfL7nWwIq+FDL6Zp/yHEhePMNnnJ0y3qfieCrmNvYct8uvtiV41UvlSe6apAfk0fY1FbWx+NwfmpvtTg==}
     engines: {node: '>=0.4.0'}
     hasBin: true
+
+  add-to-calendar-button-react@2.13.8:
+    resolution: {integrity: sha512-95FBSWCzLhhmeKkO5tLpw5spllxmV/d03Td0WOCAI4CQfN+XWmBowzR2edtDppnWiRvy/wzJEMiyf8vUoSKZaw==}
+    engines: {node: '>=18.17.0', npm: '>=9.6.7'}
+    peerDependencies:
+      react: '>=18.0.0'
+      react-dom: '>=18.0.0'
+
+  add-to-calendar-button@2.13.8:
+    resolution: {integrity: sha512-hgB2p3y05legI2x3lh3ye6unH4iDuZ7nSoCap/FQZlJ2zMoP6PltXuT4+zjM+ygMpRQ7AW1zcqhAufgmrCNqnw==}
+    engines: {node: '>=18.17.0', npm: '>=9.6.7'}
 
   ajv@6.12.6:
     resolution: {integrity: sha512-j3fVLgvTo527anyYyJOGTYJbG+vnnQYvE0m5mmkc1TK+nxAppkCLMIL0aZ4dblVCNoGShhm+kzE4ZUykBoMg4g==}
@@ -2172,6 +2186,10 @@ packages:
     resolution: {integrity: sha512-g9ljZiwki/LfxmQADO3dEY1CbpmXT5Hm2fJ+QaGKwSXUylMybePR7/67YW7jOrrvjEgL1Fmz5kzyAjWVWLlucg==}
     engines: {node: '>=6'}
 
+  timezones-ical-library@2.1.2:
+    resolution: {integrity: sha512-VW7gTRzrveUNdLaztWKlsgHRn1eagubRA/HHembnrh9xYDtDRwRWN+zWcNIE3QM+TpXikSJLp/jwxYQv7IJJvg==}
+    engines: {node: '>=22.20.0', npm: '>=10.9.3'}
+
   tiny-inflate@1.0.3:
     resolution: {integrity: sha512-pkY1fj1cKHb2seWDy0B16HeWyczlJA9/WW3u3c4z/NiWDsO3DOU5D7nhTLE9CF0yXv/QZFY7sEJmj24dK+Rrqw==}
 
@@ -3115,6 +3133,16 @@ snapshots:
       acorn: 8.15.0
 
   acorn@8.15.0: {}
+
+  add-to-calendar-button-react@2.13.8(react-dom@19.2.3(react@19.2.3))(react@19.2.3):
+    dependencies:
+      add-to-calendar-button: 2.13.8
+      react: 19.2.3
+      react-dom: 19.2.3(react@19.2.3)
+
+  add-to-calendar-button@2.13.8:
+    dependencies:
+      timezones-ical-library: 2.1.2
 
   ajv@6.12.6:
     dependencies:
@@ -4635,6 +4663,8 @@ snapshots:
   tailwindcss@4.1.18: {}
 
   tapable@2.3.0: {}
+
+  timezones-ical-library@2.1.2: {}
 
   tiny-inflate@1.0.3: {}
 
