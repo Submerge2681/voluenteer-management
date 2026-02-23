@@ -28,7 +28,7 @@ export default async function Dashboard() {
       {/* Header */}
       <div className="flex justify-between items-end border-b pb-6">
         <div>
-          <h1 className="text-3xl font-bold text-slate-900">Welcome, {profile?.full_name || 'Volunteer'}</h1>
+          <h1 className="text-3xl font-bold text-slate-200">Welcome, {profile?.full_name || 'Volunteer'}</h1>
           <p className="text-slate-500">Member since {new Date(profile?.created_at).getFullYear()}</p>
         </div>
         <div className="flex gap-3">
@@ -64,7 +64,7 @@ export default async function Dashboard() {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {events.map((event: any) => (
                     <div key={event.id} className="flex gap-4 p-4 bg-white border rounded-lg hover:shadow-md transition">
-                        <div className="w-16 h-16 bg-slate-100 rounded-full flex-shrink-0 flex items-center justify-center text-2xl">
+                        <div className="w-16 h-16 bg-slate-100 rounded-full shrink-0 flex items-center justify-center text-2xl">
                             {/* Placeholder for badge_url */}
                             🏆
                         </div>

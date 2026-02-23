@@ -92,5 +92,6 @@ export async function updateEvent(id: string, formData: FormData) {
     throw new Error("Failed to update event in database.");
   }
 
-  redirect(`/events/${id}?success=true`);
+  // redirect(`/events/${id}?success=true`);
+  redirect(`/admin/events`);
 }

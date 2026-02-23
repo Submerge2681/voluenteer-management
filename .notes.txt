@@ -55,6 +55,18 @@ after event closes turn it from totp to static_otp?
   should the secret columns be purged after a while? would that reduce server load?
 how long does the event remains open?
 
+###
+ranks:
+  no. of cleanups:
+      badges that looks like stickers?
+  no. of social activites like picnics:
+      can be poems, words, title?
+  time spent in hours
+      titles, ranks?
+  year count badge
+      sticker ribbon type
+  certain event:
+      more official looking?
 
 
 ------

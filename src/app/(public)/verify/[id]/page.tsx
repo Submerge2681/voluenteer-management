@@ -6,13 +6,14 @@ import PrintButton from '@/components/cert/PrintButton'; // Client component
 export const revalidate = 60;
 
 export default async function VerificationPage({ params }: { params: { id: string } }) {
+  const { id } = await params;
   const supabase = await createClient();
   
   // Fetch Profile - RLS 'Public profiles' policy will apply
   const { data: profile } = await supabase
     .from('profiles')
     .select('full_name, is_cert_public, created_at')
-    .eq('id', params.id)
+    .eq('id', id)
     .single();
 
   if (!profile || !profile.is_cert_public) {
@@ -23,7 +24,7 @@ export default async function VerificationPage({ params }: { params: { id: strin
   const { count } = await supabase
     .from('participation')
     .select('*', { count: 'exact', head: true })
-    .eq('user_id', params.id);
+    .eq('user_id', id);
 
   const hours = (count || 0) * 2; // Logic placeholder
 
@@ -57,7 +58,7 @@ export default async function VerificationPage({ params }: { params: { id: strin
                 <p className="text-sm font-bold uppercase text-slate-500">Organization Lead</p>
             </div>
             <div className="text-center">
-                <p className="text-xs text-slate-400">Verified ID: {params.id.slice(0,8)}...</p>
+                <p className="text-xs text-slate-400">Verified ID: {id.slice(0,8)}...</p>
                 <p className="text-xs text-slate-400">{new Date().toLocaleDateString()}</p>
             </div>
         </div>
