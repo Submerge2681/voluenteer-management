@@ -30,7 +30,7 @@ export default async function VerificationPage({ params }: { params: { id: strin
 
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col items-center justify-center p-4">
-      <div id="certificate-node" className="bg-white w-[800px] h-[600px] p-12 shadow-2xl border-8 border-double border-slate-200 relative flex flex-col items-center text-center mx-auto">
+      <div id="certificate-node" className="bg-white w-200 h-150 p-12 shadow-2xl border-8 border-double border-slate-200 relative flex flex-col items-center text-center mx-auto">
         
         {/* Decorative Corner */}
         <div className="absolute top-4 right-4 w-16 h-16 border-t-4 border-r-4 border-indigo-900"/>
