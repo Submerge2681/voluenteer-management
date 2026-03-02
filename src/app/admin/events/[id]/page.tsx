@@ -12,7 +12,7 @@ export default async function EditEventPage({ params }: { params: { id: string }
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
-  if (!user) redirect('/login');
+  if (!user) redirect('/auth');
 
   const { data: profile } = await supabase
     .from('profiles')

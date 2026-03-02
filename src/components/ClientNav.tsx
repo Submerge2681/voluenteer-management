@@ -1,22 +1,27 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { signOut } from "./signout";
 
-export default function ClientNav({ isAdmin, user }: { isAdmin: boolean; user: any }) {
+type User = { id: string } | null;
+
+export default function ClientNav({ isAdmin, user }: { isAdmin: boolean; user: User }) {
   const [isOpen, setIsOpen] = useState(false);
   const pathname = usePathname();
+  const router = useRouter();
 
   // Prevent background scrolling when the mobile menu is open
   useEffect(() => {
-    if (isOpen) {
-      document.body.style.overflow = "hidden";
-    } else {
-      document.body.style.overflow = "unset";
-    }
-    // Cleanup on unmount
+    document.body.style.overflow = isOpen ? "hidden" : "unset";
     return () => { document.body.style.overflow = "unset"; };
   }, [isOpen]);
+
+  const handleSignOut = async () => {
+    await signOut();
+    router.push("/");
+    router.refresh();
+  };
 
   const isHomePage = pathname === "/";
 
@@ -75,7 +80,7 @@ export default function ClientNav({ isAdmin, user }: { isAdmin: boolean; user: a
           {user && (
             <a href="/dashboard" className="hover:text-gray-900 transition-colors w-fit">Dashboard</a>
           )}
-          
+
           <details className="relative group md:ml-2">
             <summary className="flex items-center gap-2 cursor-pointer list-none px-3 py-1.5 -ml-3 md:ml-0 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors select-none w-fit">
               Profile
@@ -99,14 +104,17 @@ export default function ClientNav({ isAdmin, user }: { isAdmin: boolean; user: a
                     </a>
                   </li>
                   <li className="border-t border-gray-100 mt-1 pt-1">
-                    <a href="/auth/signout" className="block px-4 py-2 text-sm text-red-600 hover:bg-gray-50 transition-colors">
+                    <button
+                      onClick={handleSignOut}
+                      className="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-gray-50 transition-colors"
+                    >
                       Sign out
-                    </a>
+                    </button>
                   </li>
                 </>
               ) : (
                 <li>
-                  <a href="/auth/login" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors">
+                  <a href="/auth" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors">
                     Sign in
                   </a>
                 </li>

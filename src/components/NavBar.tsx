@@ -17,7 +17,5 @@ export default async function NavBar() {
 
   // To prevent passing non-serializable data from Server to Client, 
   // we can narrow down the user object or just pass a boolean.
-  const serializedUser = user ? { id: user.id } : null;
-
-  return <ClientNav isAdmin={isAdmin} user={serializedUser} />;
+  return <ClientNav isAdmin={isAdmin} user={user ? { id: user.id } : null} />;
 }

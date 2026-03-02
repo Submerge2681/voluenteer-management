@@ -45,7 +45,7 @@ export default async function LandingPage() {
 
         <div className="flex gap-4 justify-center">
           <Link 
-            href="/auth//login" 
+            href="/auth" 
             className="px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition"
           >
             Volunteer Login

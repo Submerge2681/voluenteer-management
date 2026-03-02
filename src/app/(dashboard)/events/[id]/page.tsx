@@ -1,9 +1,10 @@
 import { createClient } from '@/lib/supabase/server';
 import { notFound } from 'next/navigation';
-import { Calendar, MapPin, Clock } from 'lucide-react';
+import { Calendar, Clock } from 'lucide-react';
 import CountdownTimer from './CountdownTimer';
 import ShareEventButtons from './ShareEventButtons';
 import AddToCalendarButton from './AddToCalendarButton';
+import { MapLink, MapPreview } from './MapTools';
 
 
 export default async function EventDetailsPage({ params }: { params: { id: string } }) {
@@ -26,6 +27,7 @@ export default async function EventDetailsPage({ params }: { params: { id: strin
           <p className="text-slate-600 leading-relaxed whitespace-pre-wrap mt-4">
             {event.body || "No description provided."}
           </p>
+          <MapPreview place={event.place} location={event.location} placeUrl={event.place_url} />
         </div>
         
         <div>
@@ -37,7 +39,7 @@ export default async function EventDetailsPage({ params }: { params: { id: strin
             </span>
           </div>
 
-          <div className="flex sm:justify-between items-center gap-4 max-w-">
+          <div className="flex justify-between md:justify-start items-center gap-4 max-w-">
             <div className="text-center bg-indigo-50 rounded-lg p-3 min-w-20 max-h-20">
               <div className="text-indigo-600 font-bold text-xl">
                 {new Date(event.start_time).getDate()}
@@ -60,10 +62,7 @@ export default async function EventDetailsPage({ params }: { params: { id: strin
             </div>
           </div>
 
-          <div className="flex items-center gap-2 mt-4 text-slate-500">
-            <MapPin className="w-4 h-4" />
-            <span>{event.location}</span> 
-          </div>
+          <MapLink place={event.place} location={event.location} placeUrl={event.place_url} />
 
           <div className="-mt-4">
             <AddToCalendarButton 
@@ -85,7 +84,6 @@ export default async function EventDetailsPage({ params }: { params: { id: strin
             startTime={event.start_time}
             location={event.location || "TBD"}
           />
-
         </div>
       </div>
     </div>

@@ -13,13 +13,18 @@ export default async function EventsList() {
 
   return (
     <div className="max-w-5xl mx-auto p-6">
-      <h1 className="text-3xl font-bold mb-8">Upcoming Opportunities</h1>
+      <h1 className="text-3xl font-bold mb-8">Events</h1>
       
       <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
         {events?.map((event) => (
           <Link href={`/events/${event.id}`} key={event.id} className="flex flex-col bg-white border rounded-lg overflow-hidden shadow-sm hover:shadow-md transition">
-            <img src={event.image_url || "/images/placeholder.png"} alt="Event image" />
-            
+            <div className="aspect-[1.91/1] w-full overflow-hidden">
+              <img
+                src={event.image_url || "/images/placeholder.png"}
+                alt="Event image"
+                className="w-full h-full object-cover"
+              />
+            </div>
             <div className="py-2 flex-1">
               <h2 className="text-xl font-bold text-slate-900 px-4">{event.title}</h2>
                 <div className="flex justify-between items-start px-4 py-2">

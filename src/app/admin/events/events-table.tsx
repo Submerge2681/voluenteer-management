@@ -11,7 +11,7 @@ type EventData = {
   is_completed: boolean;
   location: string;
   event_type: string;
-  waste_kg: number; // Update these types based on your actual schema
+  waste_kg: number;
 };
 
 type TableProps = {

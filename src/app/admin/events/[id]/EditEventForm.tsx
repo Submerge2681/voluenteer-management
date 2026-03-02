@@ -75,18 +75,10 @@ export default function EditEventForm({ eventId, event, locations, badges }: Eve
             <input type="datetime-local" name="start_time" id="start_time" defaultValue={event.start_time?.slice(0, 16)} required className="block w-full px-3 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500" />
           </div>
 
-          {/* Completed Toggle */}
-          <div className="flex items-start pb-3">
-            <input
-              id="is_completed" name="is_completed" type="checkbox"
-              checked={isCompleted}
-              onChange={(e) => setIsCompleted(e.target.checked)}
-              className="h-5 w-5 mt-1 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500 cursor-pointer"
-            />
-            <div className="ml-3">
-              <label htmlFor="is_completed" className="font-medium text-slate-700 cursor-pointer">Mark as Completed</label>
-              <p className="text-sm text-red-500">Event will show as "Completed".</p>
-            </div>
+          {/* End Time */}
+          <div>
+            <label htmlFor="end_time" className="block text-sm font-medium text-slate-700 mb-1">End Date & Time</label>
+            <input type="datetime-local" name="end_time" id="end_time" defaultValue={event.end_time?.slice(0, 16)} required className="block w-full px-3 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500" />
           </div>
         </div>
 
@@ -112,6 +104,21 @@ export default function EditEventForm({ eventId, event, locations, badges }: Eve
           </div>
         </div>
 
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Place */}
+          <div>
+            <label htmlFor="place" className="text-sm font-medium text-slate-700 mb-1">Gathering Point</label>
+            <input type="text" name="place" id="place" defaultValue={event.place} required className="block w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 text-lg" />
+          </div>
+
+          {/* Maps */}
+          <div>
+            <label htmlFor="place_url" className="text-sm font-medium text-slate-700 mb-1">Google maps url</label>
+            <input type="text" name="place_url" id="place_url" defaultValue={event.place_url} required className="text-blue-700 underline block w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 text-lg" />
+          </div>
+          
+        </div>
+
         {/* Badges */}
         <div>
           <label htmlFor="badge_url" className="text-sm font-medium text-slate-700 mb-1">Badge</label>
@@ -132,6 +139,20 @@ export default function EditEventForm({ eventId, event, locations, badges }: Eve
             disabled={!isCompleted} required={isCompleted} step="0.01"
             className="block w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 text-lg disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed transition-colors"
           />
+        </div>
+
+        {/* Completed Toggle */}
+        <div className="flex items-start pb-3">
+          <input
+            id="is_completed" name="is_completed" type="checkbox"
+            checked={isCompleted}
+            onChange={(e) => setIsCompleted(e.target.checked)}
+            className="h-5 w-5 mt-1 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500 cursor-pointer"
+          />
+          <div className="ml-3">
+            <label htmlFor="is_completed" className="font-medium text-slate-700 cursor-pointer">Mark as Completed</label>
+            <p className="text-sm text-red-500">Event will show as "Completed".</p>
+          </div>
         </div>
 
         {/* Description */}

@@ -2,6 +2,11 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
+import sharp from 'sharp';
+
+
+const MAX_FILE_SIZE = 1 * 1024 * 1024;
+const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic'];
 
 export async function updateEvent(id: string, formData: FormData) {
   const supabase = await createClient();
@@ -22,11 +27,14 @@ export async function updateEvent(id: string, formData: FormData) {
 
   const title = formData.get('title') as string;
   const start_time = formData.get('start_time') as string;
+  const end_time = formData.get('end_time') as string;
   const body = formData.get('body') as string;
   const location = (formData.get('location') as string) || 'TBD';
   const is_completed = formData.get('is_completed') === 'on';
   const event_type = formData.get('event_type') as string;
   const badge_url = formData.get('badge_url') as string;
+  const place = formData.get('place') as string;
+  const place_url = formData.get('place_url') as string;
 
   let waste_kg: number | null = null;
   if (is_completed) {
@@ -45,6 +53,13 @@ export async function updateEvent(id: string, formData: FormData) {
   const imageFile = formData.get('image') as File | null;
 
   if (imageFile && imageFile.size > 0) {
+    // SECURITY: Validate file size and type
+    if (imageFile.size > MAX_FILE_SIZE) {
+      throw new Error(`File too large. Maximum size is ${MAX_FILE_SIZE / 1024 / 1024}MB.`);
+    }
+    if (!ALLOWED_MIME_TYPES.includes(imageFile.type)) {
+      throw new Error('Invalid file type. Only JPEG, PNG, and WebP are allowed.');
+    }
     // Delete old image using URL parsing for safety
     if (currentEvent?.image_url) {
       try {
@@ -58,21 +73,39 @@ export async function updateEvent(id: string, formData: FormData) {
       }
     }
 
-    const fileExt = imageFile.name.split('.').pop() || 'jpg';
-    const filePath = `${id}-${crypto.randomUUID()}.${fileExt}`;
+    const arrayBuffer = await imageFile.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
 
+    // Adjust width/height based on your UI needs.
+    const processedImageBuffer = await sharp(buffer)
+      .resize({
+        width: 1200,
+        height: 628,
+        fit: 'cover', // Crops to cover the exact dimensions
+        position: 'center' // Centers the crop focus
+      })
+      .webp({ quality: 80 }) // Converts to WebP with 80% quality
+      .toBuffer();
+
+    // Force .webp extension to prevent MIME sniffing vulnerabilities
+    const fileName = `${id}-${crypto.randomUUID()}.webp`;
+
+    // Upload processed buffer instead of raw file
     const { error: uploadError } = await supabase.storage
       .from('event_thumbs')
-      .upload(filePath, imageFile, { upsert: false });
+      .upload(fileName, processedImageBuffer, { 
+        upsert: false,
+        contentType: 'image/webp' // Crucial when uploading buffers
+      });
 
     if (uploadError) {
-        console.error("Supabase Storage Error:", uploadError.message); // This appears in your terminal
+        console.error("Supabase Storage Error:", uploadError.message);
         throw new Error(`Upload failed: ${uploadError.message}`);
-        }
+    }
 
     const { data: urlData } = supabase.storage
       .from('event_thumbs')
-      .getPublicUrl(filePath);
+      .getPublicUrl(fileName);
     
     image_url = urlData.publicUrl;
   }
@@ -81,8 +114,9 @@ export async function updateEvent(id: string, formData: FormData) {
   const { error: updateError } = await supabase
     .from('events')
     .update({
-      title, start_time, body, location,
+      title, start_time, end_time, body, location,
       is_completed, waste_kg, event_type, badge_url, image_url,
+      place, place_url
     })
     .eq('id', id);
 

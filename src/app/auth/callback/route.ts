@@ -72,5 +72,5 @@ export async function GET(request: Request) {
     }
   }
 
-  return NextResponse.redirect(`${origin}/login?message=Auth failed`);
+  return NextResponse.redirect(`${origin}/auth?message=Auth failed`);
 }

@@ -26,7 +26,7 @@ export async function proxy(request: NextRequest) {
   // Protect Admin Routes
   if (request.nextUrl.pathname.startsWith('/admin')) {
     if (!user) {
-      return NextResponse.redirect(new URL('/auth/login', request.url))
+      return NextResponse.redirect(new URL('/auth', request.url))
     }
 
     // Check Profile Role

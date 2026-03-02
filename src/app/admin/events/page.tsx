@@ -18,7 +18,7 @@ export default async function EventsAdminPage({
 
   // SECURITY BEST PRACTICE: Verify admin status here or rely on secure Middleware/RLS.
   // const { data: { user } } = await supabase.auth.getUser();
-  // if (!user || user.role !== 'admin') redirect('/login');
+  // if (!user || user.role !== 'admin') redirect('/auth');
 
   // 2. Calculate pagination ranges for Supabase
   const from = (page - 1) * limit;
@@ -40,7 +40,7 @@ export default async function EventsAdminPage({
   return (
     <div className="max-w-7xl mx-auto p-6">
       <div className="flex justify-between items-center mb-8">
-        <h1 className="text-3xl font-bold text-slate-200">Manage Events</h1>
+        <h1 className="text-3xl font-bold">Manage Events</h1>
       </div>
       
       <EventsTable
