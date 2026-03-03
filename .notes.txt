@@ -13,8 +13,6 @@ after event closes turn it from totp to static_otp?
 preventing checkin after an event is closed
 add ratelimit to the checkin api
 
-show list of people who signed up to the admins on maybe the scan page
-
 filter and sort button for events
 
 ###

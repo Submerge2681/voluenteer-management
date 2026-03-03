@@ -1,8 +1,8 @@
 import { createClient } from '@/lib/supabase/server';
 import { notFound, redirect } from 'next/navigation';
-import { NextResponse, type NextRequest } from 'next/server'
 import { AlertCircle } from 'lucide-react';
 import AdminCheckinManager from './AdminCheckinManager';
+import CheckinList from './CheckinList';
 
 export default async function EventDetailsPage({ params }: { params: { id: string } }) {
   const { id } = await params;
@@ -49,11 +49,15 @@ export default async function EventDetailsPage({ params }: { params: { id: strin
                 </p>
               </div>
 
-              <AdminCheckinManager 
-                eventId={event.id}
-                secret={event.checkin_secret}
-                type={event.checkin_type}
-              />
+              <div className='flex flex-col md:flex-row'>
+                <AdminCheckinManager 
+                  eventId={event.id}
+                  secret={event.checkin_secret}
+                  type={event.checkin_type}
+                />
+
+                <CheckinList eventId={event.id} />
+              </div>
             </div>
           </div>
         </div>

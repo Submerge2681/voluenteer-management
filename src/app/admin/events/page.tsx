@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
 import EventsTable from './events-table';
+import Link from 'next/link';
 
 export default async function EventsAdminPage({
   searchParams,
@@ -41,6 +42,9 @@ export default async function EventsAdminPage({
     <div className="max-w-7xl mx-auto p-6">
       <div className="flex justify-between items-center mb-8">
         <h1 className="text-3xl font-bold">Manage Events</h1>
+        <div className="flex gap-3 bg-indigo-500 text-white p-2 rounded-md hover:bg-indigo-600 shadow-sm">
+          <Link href="/admin/events/new" className="btn-secondary">Create</Link>
+        </div>
       </div>
       
       <EventsTable

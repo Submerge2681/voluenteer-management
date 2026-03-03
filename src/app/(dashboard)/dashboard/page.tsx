@@ -19,11 +19,13 @@ export default async function Dashboard() {
           <h1 className="text-3xl font-bold text-slate-900">Volunteer Dashboard</h1>
           <p className="text-slate-500">Welcome back, {profile?.full_name}</p>
         </div>
-        <div className="flex gap-3">
-          {profile?.is_cert_public && (
+
+        {profile?.is_cert_public && (
+          <div className="flex gap-3 bg-indigo-500 text-white p-2 rounded-md hover:bg-indigo-600 shadow-sm">
             <Link href={`/verify/${user.id}`} className="btn-secondary">View Certificate</Link>
-          )}
-        </div>
+          </div>
+        )}
+        
       </header>
 
       {/* Impact Metrics */}

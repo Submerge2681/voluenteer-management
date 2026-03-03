@@ -1,12 +1,9 @@
 'use server';
 
 import { createClient } from '@/lib/supabase/server';
+import { processAndUploadImage } from '@/lib/image-upload';
 import { redirect } from 'next/navigation';
-import sharp from 'sharp';
-
-
-const MAX_FILE_SIZE = 1 * 1024 * 1024;
-const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic'];
+import { revalidatePath } from 'next/cache';
 
 export async function updateEvent(id: string, formData: FormData) {
   const supabase = await createClient();
@@ -14,7 +11,6 @@ export async function updateEvent(id: string, formData: FormData) {
   
   if (!user) throw new Error("Unauthorized");
 
-  // SECURITY FIX: Re-verify admin status inside the action
   const { data: profile } = await supabase
     .from('profiles')
     .select('role')
@@ -42,7 +38,6 @@ export async function updateEvent(id: string, formData: FormData) {
     waste_kg = wasteStr ? parseFloat(wasteStr) : 0;
   }
 
-  // ── Image Handling ──
   const { data: currentEvent } = await supabase
     .from('events')
     .select('image_url')
@@ -52,80 +47,33 @@ export async function updateEvent(id: string, formData: FormData) {
   let image_url = currentEvent?.image_url || null;
   const imageFile = formData.get('image') as File | null;
 
+  // Handle Image Upload using Shared Utility
   if (imageFile && imageFile.size > 0) {
-    // SECURITY: Validate file size and type
-    if (imageFile.size > MAX_FILE_SIZE) {
-      throw new Error(`File too large. Maximum size is ${MAX_FILE_SIZE / 1024 / 1024}MB.`);
-    }
-    if (!ALLOWED_MIME_TYPES.includes(imageFile.type)) {
-      throw new Error('Invalid file type. Only JPEG, PNG, and WebP are allowed.');
-    }
-    // Delete old image using URL parsing for safety
-    if (currentEvent?.image_url) {
-      try {
-        const urlObj = new URL(currentEvent.image_url);
-        const oldFilename = urlObj.pathname.split('/').pop(); // Gets the last segment safely
-        if (oldFilename) {
-          await supabase.storage.from('event_thumbs').remove([oldFilename]);
-        }
-      } catch (e) {
-        console.error("Failed to parse/delete old image", e);
-      }
-    }
-
-    const arrayBuffer = await imageFile.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-
-    // Adjust width/height based on your UI needs.
-    const processedImageBuffer = await sharp(buffer)
-      .resize({
-        width: 1200,
-        height: 628,
-        fit: 'cover', // Crops to cover the exact dimensions
-        position: 'center' // Centers the crop focus
-      })
-      .webp({ quality: 80 }) // Converts to WebP with 80% quality
-      .toBuffer();
-
-    // Force .webp extension to prevent MIME sniffing vulnerabilities
-    const fileName = `${id}-${crypto.randomUUID()}.webp`;
-
-    // Upload processed buffer instead of raw file
-    const { error: uploadError } = await supabase.storage
-      .from('event_thumbs')
-      .upload(fileName, processedImageBuffer, { 
-        upsert: false,
-        contentType: 'image/webp' // Crucial when uploading buffers
-      });
-
-    if (uploadError) {
-        console.error("Supabase Storage Error:", uploadError.message);
-        throw new Error(`Upload failed: ${uploadError.message}`);
-    }
-
-    const { data: urlData } = supabase.storage
-      .from('event_thumbs')
-      .getPublicUrl(fileName);
+    const { url, error } = await processAndUploadImage(
+      imageFile, 
+      supabase, 
+      id, 
+      currentEvent?.image_url // Automatically handles old image deletion
+    );
     
-    image_url = urlData.publicUrl;
+    if (error) return { error };
+    image_url = url;
   }
 
-  // ── Update DB ──
   const { error: updateError } = await supabase
     .from('events')
     .update({
-      title, start_time, end_time, body, location,
-      is_completed, waste_kg, event_type, badge_url, image_url,
-      place, place_url
+      title, start_time: new Date(start_time).toISOString(), end_time: new Date(end_time).toISOString(),
+      body, location, is_completed, waste_kg, event_type, badge_url, image_url, place, place_url
     })
     .eq('id', id);
 
-  // ERROR HANDLING FIX: Don't redirect on failure
   if (updateError) {
     console.error(updateError);
-    throw new Error("Failed to update event in database.");
+    return { error: "Failed to update event in database. " + updateError.message };
   }
 
-  // redirect(`/events/${id}?success=true`);
+  revalidatePath('/events'); 
+  revalidatePath('/admin/events'); 
   redirect(`/admin/events`);
 }
