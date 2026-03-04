@@ -4,9 +4,8 @@ import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { SlidersHorizontal, X, Loader2 } from 'lucide-react';
 import { indianLocations } from '@/components/locations';
+import { eventTypes, type EventType } from '@/components/eventTypes';
 
-const EVENT_TYPES = ['cleanup', 'picnic', 'other'] as const;
-type EventType = (typeof EVENT_TYPES)[number];
 
 export function EventsFilter() {
   const router = useRouter();
@@ -142,7 +141,7 @@ export function EventsFilter() {
               Event Type
             </legend>
             <div className="flex flex-col gap-1">
-              {EVENT_TYPES.map((type) => (
+              {eventTypes.map((type) => (
                 <label
                   key={type}
                   className="flex items-center gap-2.5 px-3 py-2 rounded-lg hover:bg-slate-50 cursor-pointer select-none"

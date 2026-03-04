@@ -3,6 +3,7 @@
 import { useState, useTransition } from 'react';
 import { Save } from 'lucide-react';
 import { isRedirectError } from 'next/dist/client/components/redirect-error';
+import { eventTypes, type EventType } from '@/components/eventTypes';
 
 type EventFormProps = {
   mode: 'create' | 'edit';
@@ -92,15 +93,28 @@ export default function EventForm({ mode, initialData = {}, locations, badges, o
               {locations.map((loc) => (<option key={loc} value={loc}>{loc}</option>))}
             </select>
           </div>
-          
+
           {/* Event Type */}
           <div>
-            <label htmlFor="event_type" className="text-sm font-medium text-slate-700 mb-1">Event Type</label>
-            <select name="event_type" id="event_type" defaultValue={initialData.event_type || ''} required className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-3 bg-white focus:ring-2 focus:ring-indigo-500">
-              <option value="" disabled>Select event type</option>
-              <option value="cleanup">Cleanup</option>
-              <option value="picnic">Picnic</option>
-              <option value="other">Other</option>
+            <label htmlFor="event_type" className="text-sm font-medium text-slate-700 mb-1">
+              Event Type
+            </label>
+            <select
+              name="event_type"
+              id="event_type"
+              defaultValue={initialData.event_type || ''}
+              required
+              className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-3 bg-white focus:ring-2 focus:ring-indigo-500"
+            >
+              <option value="" disabled>
+                Select event type
+              </option>
+
+              {eventTypes.map((type) => (
+                <option key={type} value={type}>
+                  {type.charAt(0).toUpperCase() + type.slice(1)}
+                </option>
+              ))}
             </select>
           </div>
         </div>
