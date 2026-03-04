@@ -13,9 +13,14 @@ export default async function EventsList() {
 
   return (
     <div className="max-w-5xl mx-auto p-6">
-      <h1 className="text-3xl font-bold mb-8">Events</h1>
+      <div className='flex justify-between'>
+        <h1 className="text-3xl font-bold mb-8">Events</h1>
+        <div>
+        {/* filter button */}
+        </div>
+      </div>
       
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
         {events?.map((event) => (
           <Link href={`/events/${event.id}`} key={event.id} className="flex flex-col bg-white border rounded-lg overflow-hidden shadow-sm hover:shadow-md transition">
             <div className="aspect-[1.91/1] w-full overflow-hidden">
