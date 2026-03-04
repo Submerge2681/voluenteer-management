@@ -101,7 +101,7 @@ export default function AdminCheckinManager({ eventId, secret, type }: Props) {
             </label>
             <div className="flex items-center gap-4 flex-1">
               <span className="text-sm sm:text-base font-mono text-indigo-400 tracking-widest border-2 border-slate-600 rounded-xl p-3 sm:p-4 break-all flex-1">
-                {url || 'Loading URL...'}
+                <a href={url}>{url || 'Loading URL...'}</a>
               </span>
 
               <button

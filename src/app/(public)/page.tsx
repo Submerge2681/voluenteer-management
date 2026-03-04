@@ -32,28 +32,20 @@ const getChartData = unstable_cache(
       waste: e.waste_kg || 0
     })) || [];
 
-    // Aggregate cities (Simple client-side logic for demo, ideally SQL RPC for scale)
-    const cityMap = new Map<string, number>();
-    events?.forEach(e => {
-      // Assuming location is "City, Country" or just "City"
-      const city = e.location ? e.location.split(',')[0].trim() : 'Unknown';
-      const current = cityMap.get(city) || 0;
-      // Note: If 'participants' is per event, we sum them up. 
-      // If schema uses participation table, we'd count that instead.
-      // Based on schema 'participants' is int8 on events table.
-      cityMap.set(city, current + (e.participants || 0));
-    });
+    const { data: cities } = await supabase.rpc('get_top_cities');
 
-    const cityData = Array.from(cityMap.entries())
-      .map(([city, participants]) => ({ city, participants }))
-      .sort((a, b) => b.participants - a.participants)
-      .slice(0, 5); // Top 5
+    // Map RPC result to chart format
+    const cityData = cities?.map((c: any) => ({
+      city: c.city || 'Unknown',
+      participants: c.participants || 0
+    })) || [];
 
     return { wasteData, cityData };
   },
   ['landing-charts-data'], 
-  { revalidate: 3600 } // Cache for 1 hour
+  { revalidate: 3600 }
 );
+
 
 // 3. Fetch Upcoming Events for Calendar (Fresh data)
 async function getUpcomingEvents() {

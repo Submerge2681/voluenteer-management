@@ -1,13 +1,37 @@
 import { createClient } from '@/lib/supabase/server';
 import { validateEventCheckin } from '@/lib/totp';
+import { SupabaseClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
+
+const RATE_LIMIT_MAX = 5;
+const RATE_LIMIT_WINDOW_SECONDS = 60;
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function getClientIp(req: NextRequest): string {
+  return (
+    req.headers.get('x-real-ip') ??
+    req.headers.get('x-forwarded-for')?.split(',')[0].trim() ??
+    '127.0.0.1'
+  );
+}
+
+async function checkRateLimit(ip: string, supabase: SupabaseClient): Promise<boolean> {
+  const { data, error } = await supabase.rpc('check_rate_limit', {
+    p_ip: ip,
+    p_max_requests: RATE_LIMIT_MAX,
+    p_window_seconds: RATE_LIMIT_WINDOW_SECONDS,
+  });
+  if (error) {
+    console.error('Rate limit check failed:', error.message);
+    return true; // fail open — prefer availability over strict limiting
+  }
+  return data as boolean;
+}
+
 
 async function handleCheckin(otp: string, event_id: string, supabase: any) {
   // 1. Get Current User
   const { data: { user } } = await supabase.auth.getUser();
-  console.log(otp);
-  console.log(event_id);
-
   // 2. FETCH EVENT CONFIG (Needed for validation)
   // We use a service role check here or ensure RLS allows reading basic event details publicly
   const { data: event, error } = await supabase
@@ -41,6 +65,7 @@ async function handleCheckin(otp: string, event_id: string, supabase: any) {
     response.cookies.set('pending_checkin', JSON.stringify({ otp, event_id }), {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
       maxAge: 60 * 15, // 15 minutes to register
       path: '/',
     });
@@ -72,27 +97,40 @@ async function handleCheckin(otp: string, event_id: string, supabase: any) {
   return NextResponse.json({ status: 'success', message: 'Check-in Complete!' });
 }
 
-export async function POST(req: NextRequest) {
-  const supabase = await createClient();
-  const { otp, event_id } = await req.json();
-
+async function handleRequest(req: NextRequest, otp: string | null, event_id: string | null) {
   if (!otp || !event_id) {
     return NextResponse.json({ error: 'Missing parameters' }, { status: 400 });
+  }
+
+  if (!UUID_REGEX.test(event_id)) {
+    return NextResponse.json({ error: 'Invalid event' }, { status: 400 });
+  }
+
+  const supabase = await createClient();
+  const ip = getClientIp(req);
+  const allowed = await checkRateLimit(ip, supabase);
+
+  if (!allowed) {
+    return NextResponse.json(
+      { error: 'Too many requests. Please wait before trying again.' },
+      { status: 429, headers: { 'Retry-After': String(RATE_LIMIT_WINDOW_SECONDS) } }
+    );
   }
 
   return handleCheckin(otp, event_id, supabase);
 }
 
+export async function POST(req: NextRequest) {
+  const body = await req.json();
+  return handleRequest(req, body.otp ?? null, body.event_id ?? null);
+}
+
+// Note: GET exposes otp in URL (browser history, server logs, referrer headers).
+// Prefer POST where possible. Keep GET only if needed for QR code deep-links.
 export async function GET(req: NextRequest) {
-  const supabase = await createClient();
-  const otp = req.nextUrl.searchParams.get('otp');
-  const event_id = req.nextUrl.searchParams.get('event_id');
-  console.log(otp)
-  console.log(event_id)
-
-  if (!otp || !event_id) {
-    return NextResponse.json({ error: 'Missing parameters' }, { status: 400 });
-  }
-
-  return handleCheckin(otp, event_id, supabase);
+  return handleRequest(
+    req,
+    req.nextUrl.searchParams.get('otp'),
+    req.nextUrl.searchParams.get('event_id'),
+  );
 }
