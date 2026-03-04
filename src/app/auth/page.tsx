@@ -1,15 +1,13 @@
 'use client';
 
+import { Suspense } from 'react';
 import { useActionState } from 'react';
 import { handleAuth, type AuthState } from './actions';
 import { useSearchParams } from 'next/navigation';
 
-const initialState: AuthState = {
-  status: 'idle',
-  message: '',
-};
+const initialState: AuthState = { status: 'idle', message: '' };
 
-export default function UnifiedAuthPage() {
+function AuthForm() {
   const [state, formAction, isPending] = useActionState(handleAuth, initialState);
   const searchParams = useSearchParams();
   const defaultMessage = searchParams.get('message');
@@ -90,5 +88,13 @@ export default function UnifiedAuthPage() {
         </form>
       </div>
     </div>
+  );
+}
+
+export default function UnifiedAuthPage() {
+  return (
+    <Suspense>
+      <AuthForm />
+    </Suspense>
   );
 }
