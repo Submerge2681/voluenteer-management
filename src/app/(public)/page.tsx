@@ -6,10 +6,9 @@ import { WasteGrowthChart, TopCitiesChart } from './ImpactCharts';
 import { MiniCalendar } from './MiniCalendar';
 
 
-const supabase = await createClient();
-
 // 1. Fetch Global Stats (Fast, single row)
 async function getGlobalStats() {
+  const supabase = await createClient();
   const { data } = await supabase.from('global_stats').select('*').single();
   return data;
 }
@@ -18,7 +17,11 @@ async function getGlobalStats() {
 // Aggregates waste over events and top cities
 const getChartData = unstable_cache(
   async () => {
-    
+    const { createClient: createSupabaseClient } = await import('@supabase/supabase-js');
+    const supabase = createSupabaseClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    );
     // Fetch last 20 completed events for the waste graph
     const { data: events } = await supabase
       .from('events')
@@ -50,7 +53,7 @@ const getChartData = unstable_cache(
 // 3. Fetch Upcoming Events for Calendar (Fresh data)
 async function getUpcomingEvents() {
   const today = new Date().toISOString();
-  
+  const supabase = await createClient();
   // Fetch events for current window (e.g., next 3 months)
   const { data } = await supabase
     .from('events')
@@ -74,7 +77,7 @@ export default async function LandingPage() {
     <main className="flex min-h-screen flex-col items-center bg-slate-50 font-sans">
       <div>
         {/* Hero Section */}
-        <section className="w-7xl py-20 pr-8 text-center bg-white border-b border-slate-200 flex flex-col lg:flex-row justify-end items-end ">
+        <section className="lg:w-5xl xl:w-6xl py-20 lg:pr-8 gap-y-12 lg:gap-y-0 text-center bg-white border-b border-slate-200 flex flex-col lg:flex-row items-center lg:items-end ">
           <div className="max-w-4xl mx-auto space-y-6">
             <h1 className="text-5xl md:text-6xl font-extrabold tracking-tight text-slate-900">
               {process.env.NEXT_PUBLIC_ORG_NAME || "The Checkin App"}
@@ -99,7 +102,7 @@ export default async function LandingPage() {
             </div>
           </div>
           {/* Calendar Column */}
-          <div className="flex flex-col h-full w-md">
+          <div className="sm:flex flex-col h-full hidden w-md">
               <MiniCalendar events={upcomingEvents} />
           </div>
         </section>
@@ -131,10 +134,10 @@ export default async function LandingPage() {
             
             {/* Charts Column */}
             <div className="space-y-8">
-              <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 h-100">
+              <div className="bg-white p-2 md:p-6 rounded-xl shadow-sm border border-slate-200 h-100">
                 <WasteGrowthChart data={chartData.wasteData} />
               </div>
-              <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 h-100">
+              <div className="bg-white p-2 md:p-6 rounded-xl shadow-sm border border-slate-200 h-100">
                 <TopCitiesChart data={chartData.cityData} />
               </div>
             </div>
