@@ -1,0 +1,12 @@
+name: Keep App Alive
+on:
+  schedule:
+    - cron: '0 8 * * *' # Runs at 8am daily
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Landing Page
+        run: curl -I https://voluenteer-management.vercel.app/

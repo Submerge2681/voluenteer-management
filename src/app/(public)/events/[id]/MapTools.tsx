@@ -5,10 +5,10 @@ import { MapPin, ExternalLink } from 'lucide-react';
 interface MapProps {
   place: string;
   location: string;
-  placeUrl: string; // "lat, lng"
+  placeUrl: string | null | undefined;
 }
-
-function parseCoords(placeUrl: string) {
+function parseCoords(placeUrl: string | null | undefined) {
+  if (!placeUrl) return null;
   const match = placeUrl.match(/([-\d.]+)[,\s]+([-\d.]+)/);
   if (!match) return null;
   return { lat: parseFloat(match[1]), lng: parseFloat(match[2]) };
@@ -26,6 +26,15 @@ function getMapUrl(lat: number, lng: number, label: string): string {
 export function MapLink({ place, location, placeUrl }: MapProps) {
   const coords = parseCoords(placeUrl);
   const label = `${place}, ${location}`;
+
+  if (!coords) {
+    return (
+      <div className="flex items-center gap-2 mt-4 text-slate-500">
+        <MapPin className="w-4 h-4 shrink-0" />
+        <span>{label} · TBD</span>
+      </div>
+    );
+  }
 
   const handleClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
     e.preventDefault();

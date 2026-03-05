@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import ClientNav from "./ClientNav"; // Ensure this path matches where you saved the client component
+import ClientNav from "./ClientNav";
 
 export default async function NavBar() {
   const supabase = await createClient();

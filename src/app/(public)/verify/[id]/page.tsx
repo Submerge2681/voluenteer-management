@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
 import { notFound } from 'next/navigation';
-import PrintButton from '@/components/cert/PrintButton'; // Client component
+import PrintButton from './PrintButton';
 
 export const revalidate = 500; // Cache for 5 min
 export default async function VerificationPage({ params }: { params: { id: string } }) {

@@ -82,7 +82,7 @@ export default function ClientNav({ isAdmin, user }: { isAdmin: boolean; user: U
           )}
 
           <details className="relative group md:ml-2">
-            <summary className="flex items-center gap-2 cursor-pointer list-none px-3 py-1.5 -ml-3 md:ml-0 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors select-none w-fit">
+            <summary className="flex items-center gap-2 cursor-pointer list-none -ml-3 md:ml-0 rounded-md text-sm font-medium text-gray-700 hover:text-gray-900 transition-colors select-none w-fit">
               Profile
               <svg
                 className="w-4 h-4 transition-transform duration-200 group-open:rotate-180"

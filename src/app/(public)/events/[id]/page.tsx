@@ -18,8 +18,8 @@ export default async function EventDetailsPage({ params }: { params: { id: strin
   return (
     <div className="max-w-6xl mx-auto p-6 space-y-8">
       {/* Header Section */}
-      <div className="bg-white p-8 shadow-sm border border-slate-200 flex flex-col sm:flex-row gap-12">
-        <div className='max-w-3xl'>
+      <div className="flex flex-col sm:flex-row gap-12">
+        <div className='max-w-3xl bg-white p-8 shadow-sm border border-slate-200'>
           {event.image_url && (
             <img className="" src={event.image_url} alt={`Thumbnail image for ${event.title}`}/>
           )}
@@ -30,12 +30,12 @@ export default async function EventDetailsPage({ params }: { params: { id: strin
           <MapPreview place={event.place} location={event.location} placeUrl={event.place_url} />
         </div>
         
-        <div>
+        <div className='bg-white p-8 shadow-sm border border-slate-200'>
           <div className='mb-4'>
             <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
               event.is_completed ? 'bg-slate-100 text-slate-800' : 'bg-green-100 text-green-800'
             }`}>
-              {event.is_completed ? 'Completed' : 'Open'}
+              {event.is_completed ? 'Completed' : 'Upcoming'}
             </span>
           </div>
 

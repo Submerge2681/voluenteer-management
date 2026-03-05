@@ -7,6 +7,19 @@ after event closes turn it from totp to static_otp?
 preventing checkin after an event is closed
 add ratelimit to the checkin api
 
+fix 2nd chart on homepage
+
+add my smtp details
+
+
+
+
+
+
+
+
+
+
 ###
 ranks:
   no. of cleanups:
@@ -209,3 +222,30 @@ SELECT cron.schedule(
   '0 0 4 6- *',
   'SELECT cleanup_rate_limits();'
 );
+
+
+
+create or replace function sync_event_participants()
+returns trigger as $$
+declare
+  target_event_id uuid;
+begin
+  if TG_OP = 'DELETE' then
+    target_event_id := OLD.event_id;
+  else
+    target_event_id := NEW.event_id;
+  end if;
+
+  update events
+  set participants = (
+    select count(*) from participation where event_id = target_event_id
+  )
+  where id = target_event_id;
+
+  return NEW;
+end;
+$$ language plpgsql;
+
+create trigger trg_sync_participants
+after insert or delete on participation
+for each row execute function sync_event_participants();
