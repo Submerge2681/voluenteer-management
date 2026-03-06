@@ -50,10 +50,8 @@ export default async function EventDetailsPage({ params }: { params: { id: strin
               </div>
 
               <div className='flex flex-col md:flex-row'>
-                <AdminCheckinManager 
+                <AdminCheckinManager
                   eventId={event.id}
-                  secret={event.checkin_secret}
-                  type={event.checkin_type}
                 />
 
                 <CheckinList eventId={event.id} />

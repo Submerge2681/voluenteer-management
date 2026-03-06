@@ -1,45 +1,64 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useQRCode } from 'next-qrcode';
 import { RefreshCw, Copy, Check, Maximize2, X } from 'lucide-react';
-import { generateEventCode, getTotpTimeRemaining } from '@/lib/totp';
+import { getCheckinCode } from './actions';
 
 interface Props {
   eventId: string;
-  secret: string;
-  type: 'totp' | 'static_otp';
 }
 
-export default function AdminCheckinManager({ eventId, secret, type }: Props) {
+export default function AdminCheckinManager({ eventId }: Props) {
   const { Canvas } = useQRCode();
   const [code, setCode] = useState<string>('');
   const [timeLeft, setTimeLeft] = useState<number>(30);
+  const [type, setType] = useState<'totp' | 'static_otp'>('totp');
   const [copied, setCopied] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  
-  // State to safely handle client-side rendering without hydration errors
+
   const [mounted, setMounted] = useState(false);
   const [origin, setOrigin] = useState('');
+
+  const isFetching = useRef(false);
+  const timeLeftRef = useRef(30);
+
+  const fetchCode = useCallback(async () => {
+    if (isFetching.current) return;
+    isFetching.current = true;
+    try {
+      const result = await getCheckinCode(eventId).catch(() => null);
+      if (!result) return;
+      setCode(result.code);
+      setTimeLeft(result.timeLeft);
+      timeLeftRef.current = result.timeLeft;
+      setType(result.type);
+    } finally {
+      isFetching.current = false;
+    }
+  }, [eventId]);
 
   useEffect(() => {
     setMounted(true);
     setOrigin(window.location.origin);
 
-    const updateCode = async () => {
-      setCode(await generateEventCode(secret, type));
-      setTimeLeft(getTotpTimeRemaining());
-    };
+    fetchCode();
 
-    if (type === 'static_otp') {
-      updateCode();
-      return;
-    }
-
-    updateCode();
-    const timer = setInterval(updateCode, 1000);
+    // Count down client-side — no server call each second.
+    // Only refetch from the server when the 30s TOTP period rolls over.
+    const timer = setInterval(() => {
+      timeLeftRef.current -= 1;
+      if (timeLeftRef.current <= 2 && !isFetching.current) {
+        fetchCode(); // prefetch 2s early so the new code is ready when the bar resets
+      }
+      if (timeLeftRef.current <= 0) {
+        timeLeftRef.current = 30; // optimistic reset while request is in-flight
+      }
+      setTimeLeft(timeLeftRef.current);
+    }, 1000);
     return () => clearInterval(timer);
-  }, [secret, type]);
+  }, [eventId, fetchCode]);
+
 
   // Ensures URL is only built after hydration to prevent SSR mismatch
   const url = mounted && code ? `${origin}/api/checkin?otp=${code}&event_id=${eventId}` : '';

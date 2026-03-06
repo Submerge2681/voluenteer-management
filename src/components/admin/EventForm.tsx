@@ -129,7 +129,7 @@ export default function EventForm({ mode, initialData = {}, locations, badges, o
           {/* Maps */}
           <div>
             <label htmlFor="place_url" className="text-sm font-medium text-slate-700 mb-1">Latitude and Longatude</label>
-            <input type="url" name="place_url" id="place_url" defaultValue={initialData.place_url} required className="text-blue-700 underline block w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 text-lg" placeholder="12.733411188021822, 80.21606848868025" />
+            <input type="text" name="place_url" id="place_url" defaultValue={initialData.place_url} required className="text-blue-700 underline block w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 text-lg" placeholder="12.733411188021822, 80.21606848868025" />
           </div>
         </div>
 

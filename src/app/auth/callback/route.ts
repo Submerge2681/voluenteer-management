@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
-import { validateEventCheckin } from '@/lib/totp'; // Logic from Step 1
+import { verifyCheckinCookie } from '@/lib/checkin-cookie';
 import { cookies } from 'next/headers';
 
 export async function GET(request: Request) {
@@ -20,50 +20,41 @@ export async function GET(request: Request) {
       const pendingCookie = cookieStore.get('pending_checkin');
 
       if (pendingCookie) {
+        // Default to dashboard; updated below based on outcome
         let response = NextResponse.redirect(`${origin}/dashboard`);
+        let msg = 'checkin_failed';
 
         try {
-          const { otp, event_id } = JSON.parse(pendingCookie.value);
+          // Verify the HMAC-signed cookie — no OTP re-validation needed because
+          // the OTP was already verified when the cookie was set (it would be
+          // expired by the time the user finishes signing up anyway).
+          const claim = verifyCheckinCookie(pendingCookie.value);
           const { data: { user } } = await supabase.auth.getUser();
 
-          if (user) {
-            // Fetch Event Secret (Service Role or RLS permitting)
-            const { data: event } = await supabase
-              .from('events')
-              .select('checkin_type, checkin_secret')
-              .eq('id', event_id)
-              .single();
+          if (!claim) {
+            msg = 'checkin_invalid';
+          } else if (user) {
+            const { error: insertError } = await supabase
+              .from('participation')
+              .insert({ user_id: user.id, event_id: claim.event_id });
 
-            if (event) {
-              // Validate OTP
-              const validation = await validateEventCheckin(otp, {
-                checkin_type: event.checkin_type,
-                checkin_secret: event.checkin_secret
-              });
-
-              if (validation.success) {
-                // Insert Participation
-                await supabase.from('participation').insert({
-                  user_id: user.id,
-                  event_id: event_id
-                });
-                
-                // Update Last Active
-                await supabase.from('profiles').update({ 
-                  last_active: new Date().toISOString() 
-                }).eq('id', user.id);
-
-                // Redirect with message on success
-                response = NextResponse.redirect(`${origin}/dashboard?msg=checkin_complete`);
-              }
+            if (!insertError) {
+              await supabase
+                .from('profiles')
+                .update({ last_active: new Date().toISOString() })
+                .eq('id', user.id);
+              msg = 'checkin_complete';
+            } else if (insertError.code === '23505') {
+              msg = 'already_checked_in';
             }
           }
         } catch (e) {
-          console.error("Cookie parsing or processing failed", e);
+          console.error('Pending check-in processing failed:', e);
         }
-        // Clear the cookie regardless of success to prevent loops
+
+        response = NextResponse.redirect(`${origin}/dashboard?msg=${msg}`);
+        // Clear the cookie regardless of outcome to prevent loops
         response.cookies.delete('pending_checkin');
-        
         return response;
       }
       // --- END GUEST CHECK-IN LOGIC ---

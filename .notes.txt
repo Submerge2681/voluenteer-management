@@ -11,6 +11,189 @@ fix 2nd chart on homepage
 
 add my smtp details
 
+  ---                                                                                                                                                                                                                                                                                                                       
+  Issues & Suggested Fixes                                                                                                                                                                                                                                                                                                  
+                                                                                                                                                                                                                                                                                                                            
+  1. Critical Bug: Guest TOTP Flow Will Almost Always Fail                                                                                                                                                                                                                                                                  
+                  
+  File: src/app/auth/callback/route.ts:39 and src/app/api/checkin/route.ts:65
+
+  The guest flow stores the raw TOTP code in the cookie, then re-validates it up to 15 minutes later in the callback. A TOTP code expires every 30 seconds. By the time the user signs up and clicks the magic link, the code is long expired, validation silently fails, and they're redirected to the dashboard without
+  being checked in.
+
+  Fix: Don't store the raw OTP. After successful validation, store a pre-validated claim instead:
+
+  // In route.ts — after validation succeeds, set:
+  response.cookies.set('pending_checkin', JSON.stringify({
+    validated: true,
+    event_id
+  }), { ... });
+
+  // In callback/route.ts — skip re-validation:
+  const { validated, event_id } = JSON.parse(pendingCookie.value);
+  if (validated && event_id && user) {
+    await supabase.from('participation').insert({ user_id: user.id, event_id });
+  }
+
+  You should also HMAC-sign the cookie value to prevent forgery (since you skip re-validation). Use a COOKIE_SECRET env var with Node's crypto.createHmac.
+
+  ---
+  2. Critical Bug: otplib API Used Incorrectly — TOTP Likely Never Validates
+
+  File: src/lib/totp.ts:39-46
+
+  // This is wrong:
+  const result = await verify({ secret, token: trimmedCode });
+  if (result.valid) { ... }
+
+  otplib's verify returns a synchronous boolean, not a promise with a .valid property. So result is true or false, and result.valid is always undefined (falsy). Every valid TOTP code returns { success: false }. Same problem with generate({ secret }) — it expects generate(secret) as a positional string.
+
+  Fix: Use the authenticator preset directly:
+
+  import { authenticator } from 'otplib';
+
+  export async function validateEventCheckin(...) {
+    if (event.checkin_type === 'totp') {
+      const isValid = authenticator.verify({
+        token: trimmedCode,
+        secret: event.checkin_secret
+      });
+      return isValid
+        ? { success: true, message: 'TOTP Verified' }
+        : { success: false, message: 'Code expired or invalid' };
+    }
+  }
+
+  export function generateEventSecret(type: 'totp' | 'static_otp') {
+    if (type === 'totp') return authenticator.generateSecret();
+    // ...
+  }
+
+  export async function generateEventCode(secret: string, type: 'totp' | 'static_otp') {
+    if (type === 'static_otp') return secret;
+    return authenticator.generate(secret);
+  }
+
+  ---
+  3. Security: TOTP Secret Sent to the Browser
+
+  File: src/app/admin/scan/[id]/page.tsx:55, src/app/admin/scan/[id]/AdminCheckinManager.tsx:7
+
+  The raw checkin_secret is passed as a prop to a 'use client' component, which means it's serialized into the page HTML and sent to the browser. Any admin who opens DevTools can extract it and generate unlimited valid TOTP codes.
+
+  Fix: Move code generation server-side. Create a Server Action that generates the current code and remaining time, and have the client component poll it every second instead of receiving the secret:
+
+  // New server action
+  'use server'
+  export async function getCurrentCode(eventId: string) {
+    // auth check here
+    const { data: event } = await supabase.from('events')
+      .select('checkin_secret, checkin_type').eq('id', eventId).single();
+    return { code: await generateEventCode(event.checkin_secret, event.checkin_type), timeLeft: getTotpTimeRemaining() };
+  }
+
+  // AdminCheckinManager.tsx — poll instead of holding secret
+  const { eventId, type } = props; // no `secret` prop
+  useEffect(() => {
+    const tick = async () => {
+      const { code, timeLeft } = await getCurrentCode(eventId);
+      setCode(code); setTimeLeft(timeLeft);
+    };
+    tick();
+    const timer = setInterval(tick, 1000);
+    return () => clearInterval(timer);
+  }, [eventId]);
+
+  ---
+  4. Security: OTP Exposed in GET Request URL
+
+  File: src/app/admin/scan/[id]/AdminCheckinManager.tsx:45
+
+  const url = `${origin}/api/checkin?otp=${code}&event_id=${eventId}`;
+
+  The OTP appears in browser history, server logs, and Referer headers. You acknowledge this in a comment but keep the GET route anyway. Since the QR code is scanned with a phone camera which opens a browser, this is unavoidable for the QR use-case. However, you can mitigate it:
+
+  - Make the GET route redirect to a landing page that completes check-in via POST, keeping the OTP out of logs after the redirect.
+  - Or generate a short-lived one-time token server-side and encode that in the URL instead of the raw OTP.
+
+  ---
+  5. Bug: Silent Failure on Guest Check-in
+
+  File: src/app/auth/callback/route.ts:44-59
+
+  When TOTP validation or the insert fails in the callback, the user is silently redirected to /dashboard with no error message. They have no idea check-in failed.
+
+  // Current:
+  if (validation.success) {
+    await supabase.from('participation').insert({...});
+    response = NextResponse.redirect(`${origin}/dashboard?msg=checkin_complete`);
+  }
+  // Falls through silently to dashboard if validation fails
+
+  Fix: Add an else branch that redirects with a failure message:
+
+  if (validation.success) {
+    const { error } = await supabase.from('participation').insert({...});
+    const msg = error?.code === '23505' ? 'already_checked_in' : error ? 'checkin_failed' : 'checkin_complete';
+    response = NextResponse.redirect(`${origin}/dashboard?msg=${msg}`);
+  } else {
+    response = NextResponse.redirect(`${origin}/dashboard?msg=checkin_expired`);
+  }
+
+  ---
+  6. Bug: Commented-out Debug Log in Production
+
+  File: src/app/auth/actions.ts:35
+
+  console.log(existingUser)
+
+  This logs user profile data on every auth attempt. Remove it.
+
+  ---
+  7. Minor: Static PIN Uses Math.random()
+
+  File: src/lib/totp.ts:67
+
+  return Math.floor(100000 + Math.random() * 900000).toString();
+
+  Math.random() is not cryptographically secure. Use:
+
+  import { randomInt } from 'crypto';
+  return (100000 + randomInt(900000)).toString();
+
+  ---
+  8. Minor: handleCheckin Uses supabase: any
+
+  File: src/app/api/checkin/route.ts:32
+
+  Type it properly with SupabaseClient (already imported on line 3):
+
+  async function handleCheckin(otp: string, event_id: string, supabase: SupabaseClient)
+
+  ---
+  Summary Table
+
+  ┌─────┬──────────┬──────────────────────────┬────────────────────────────────────────────────────────────────┐
+  │  #  │ Severity │           File           │                             Issue                              │
+  ├─────┼──────────┼──────────────────────────┼────────────────────────────────────────────────────────────────┤
+  │ 1   │ Critical │ callback/route.ts        │ TOTP re-validated after expiry — guest check-in silently fails │
+  ├─────┼──────────┼──────────────────────────┼────────────────────────────────────────────────────────────────┤
+  │ 2   │ Critical │ lib/totp.ts              │ Wrong otplib API — TOTP never actually validates               │
+  ├─────┼──────────┼──────────────────────────┼────────────────────────────────────────────────────────────────┤
+  │ 3   │ High     │ admin/scan/[id]/page.tsx │ checkin_secret sent to browser in client component props       │
+  ├─────┼──────────┼──────────────────────────┼────────────────────────────────────────────────────────────────┤
+  │ 4   │ Medium   │ AdminCheckinManager.tsx  │ OTP exposed in GET URL / browser history                       │
+  ├─────┼──────────┼──────────────────────────┼────────────────────────────────────────────────────────────────┤
+  │ 5   │ Medium   │ callback/route.ts        │ Silent failure on guest check-in — no user feedback            │
+  ├─────┼──────────┼──────────────────────────┼────────────────────────────────────────────────────────────────┤
+  │ 6   │ Low      │ auth/actions.ts          │ console.log(existingUser) leaks data to server logs            │
+  ├─────┼──────────┼──────────────────────────┼────────────────────────────────────────────────────────────────┤
+  │ 7   │ Low      │ lib/totp.ts              │ Math.random() for PIN, use crypto.randomInt                    │
+  ├─────┼──────────┼──────────────────────────┼────────────────────────────────────────────────────────────────┤
+  │ 8   │ Low      │ api/checkin/route.ts     │ supabase: any type                                             │
+  └─────┴──────────┴──────────────────────────┴────────────────────────────────────────────────────────────────┘
+
+  Issues 1 and 2 together mean the TOTP-based guest check-in flow is currently completely non-functional. Would you like me to implement the fixes?
 
 
 

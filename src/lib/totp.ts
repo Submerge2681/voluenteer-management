@@ -1,5 +1,6 @@
 // lib/totp.ts
 import { generateSecret, generate, verify } from 'otplib';
+import { randomInt } from 'crypto';
 
 
 interface ValidationResult {
@@ -63,8 +64,8 @@ export function generateEventSecret(type: 'totp' | 'static_otp'): string {
   if (type === 'totp') {
     return generateSecret(); // e.g. "JBSWY3DPEHPK3PXP"
   }
-  // 6-digit static PIN
-  return Math.floor(100000 + Math.random() * 900000).toString();
+  // 6-digit static PIN (crypto.randomInt is cryptographically secure)
+  return (100000 + randomInt(900000)).toString();
 }
 
 /**

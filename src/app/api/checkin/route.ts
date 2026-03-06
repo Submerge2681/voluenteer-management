@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
 import { validateEventCheckin } from '@/lib/totp';
+import { signCheckinCookie } from '@/lib/checkin-cookie';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
 
@@ -29,7 +30,7 @@ async function checkRateLimit(ip: string, supabase: SupabaseClient): Promise<boo
 }
 
 
-async function handleCheckin(otp: string, event_id: string, supabase: any) {
+async function handleCheckin(otp: string, event_id: string, supabase: SupabaseClient) {
   // 1. Get Current User
   const { data: { user } } = await supabase.auth.getUser();
   // 2. FETCH EVENT CONFIG (Needed for validation)
@@ -56,17 +57,20 @@ async function handleCheckin(otp: string, event_id: string, supabase: any) {
 
   // --- BRANCH A: GUEST FLOW ---
   if (!user) {
-    // Store valid scan data in a secure, httpOnly cookie
-    const response = NextResponse.json({ 
-      status: 'guest', 
-      redirectUrl: `/auth/register?msg=scan_success` 
+    // OTP already validated — store a signed claim rather than the raw OTP.
+    // The raw OTP would expire in 30 s, long before the user finishes signing up.
+    const cookieValue = signCheckinCookie({ validated: true, event_id });
+
+    const response = NextResponse.json({
+      status: 'guest',
+      redirectUrl: `/auth?msg=scan_success`
     });
 
-    response.cookies.set('pending_checkin', JSON.stringify({ otp, event_id }), {
+    response.cookies.set('pending_checkin', cookieValue, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
-      maxAge: 60 * 15, // 15 minutes to register
+      maxAge: 60 * 15, // 15 minutes to complete sign-up
       path: '/',
     });
 

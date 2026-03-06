@@ -1,6 +1,6 @@
 'use server'
 
-import { createClient, createAdminClient } from '@/lib/supabase/server';
+import { createClient } from '@/lib/supabase/server';
 import { headers } from 'next/headers'
 
 // Define the state shape for React 19 useActionState
@@ -32,7 +32,6 @@ export async function handleAuth(prevState: AuthState, formData: FormData): Prom
     .eq('email', email)
     .single();
 
-  console.log(existingUser)
 
 //   const supabase = await createClient();
   // --- PATH A: USER ALREADY EXISTS ---
