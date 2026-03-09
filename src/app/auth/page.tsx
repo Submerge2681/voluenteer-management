@@ -24,7 +24,7 @@ function AuthForm() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-50">
+    <div className="flex min-h-[95vh] items-center justify-center bg-slate-50">
       <div className="w-full max-w-md p-8 bg-white rounded-xl shadow-lg">
         <div className="text-center mb-8">
           <h2 className="text-3xl font-bold text-slate-900">
