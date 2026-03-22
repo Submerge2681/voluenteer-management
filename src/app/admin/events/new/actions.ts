@@ -34,16 +34,22 @@ export async function createEvent(formData: FormData) {
   const type = formData.get('checkin_type') as 'totp' | 'static_otp';
   const is_completed = formData.get('is_completed') === 'on';
 
+  if (new Date(end_time) <= new Date(start_time)) {
+    return { error: 'End time must be after start time.' };
+  }
+
   let waste_kg: number | null = null;
   if (is_completed) {
     const wasteStr = formData.get('waste_kg') as string;
     waste_kg = wasteStr ? parseFloat(wasteStr) : 0;
   }
-  
+
   // Generating Checkin Secret
   let secret = formData.get('static_pin') as string;
   if (type === 'totp' || !secret) {
-     secret = generateEventSecret(type);
+    secret = generateEventSecret(type);
+  } else if (!/^\d{4,8}$/.test(secret)) {
+    return { error: 'Static PIN must be 4–8 digits.' };
   }
 
   // Handle Image Upload using Shared Utility
@@ -67,6 +73,7 @@ export async function createEvent(formData: FormData) {
 
   if (error) return { error: error.message };
 
+  revalidatePath('/');
   revalidatePath('/events');
   revalidatePath('/admin/events');
   redirect('/admin/events');

@@ -1,31 +1,45 @@
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/server';
 import { notFound } from 'next/navigation';
 import PrintButton from './PrintButton';
 
-export const revalidate = 500; // Cache for 5 min
+export const revalidate = 300; // Cache for 5 min
+
 export default async function VerificationPage({ params }: { params: { id: string } }) {
   const { id } = await params;
+
+  // Public profile check — RLS "Public profiles are viewable by everyone" applies
   const supabase = await createClient();
-  
-  // Fetch Profile - RLS 'Public profiles' policy will apply
   const { data: profile } = await supabase
     .from('profiles')
     .select('full_name, is_cert_public, created_at')
     .eq('id', id)
     .single();
+
   if (!profile || !profile.is_cert_public) {
-    return notFound(); // Or return a "Private Profile" UI
+    return notFound();
   }
-  // Calculate stats (Server-side for security)
-  const { count } = await supabase
-    .from('participation')
-    .select('*', { count: 'exact', head: true })
-    .eq('user_id', id);
-  const hours = (count || 0) * 2; // Logic placeholder
+
+  // Use service role to read participation for a public certificate viewer —
+  // regular RLS only allows users to read their own participation rows.
+  const admin = createAdminClient();
+  const { data: history } = await admin
+    .from('volunteer_history')
+    .select('start_time, end_time')
+    .eq('user_id', id)
+    .eq('is_completed', true);
+
+  const hours = Math.round(
+    (history ?? []).reduce((acc, e) => {
+      const diff = new Date(e.end_time).getTime() - new Date(e.start_time).getTime();
+      return acc + Math.max(0, diff / 3_600_000);
+    }, 0)
+  );
+
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col items-center justify-center p-4">
       <div id="certificate-node" className="bg-white w-200 h-150 p-12 shadow-2xl border-8 border-double border-slate-200 relative flex flex-col items-center text-center mx-auto">
-        
+
         {/* Decorative Corner */}
         <div className="absolute top-4 right-4 w-16 h-16 border-t-4 border-r-4 border-indigo-900"/>
         <div className="absolute bottom-4 left-4 w-16 h-16 border-b-4 border-l-4 border-indigo-900"/>

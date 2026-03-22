@@ -20,10 +20,10 @@ interface EventConfig {
  * @param inputCode - Code from QR scan or user input
  * @param event     - Event configuration
  */
-export async function validateEventCheckin(
+export function validateEventCheckin(
   inputCode: string,
   event: EventConfig
-): Promise<ValidationResult> {
+): ValidationResult {
   const trimmedCode = inputCode.trim();
 
   // 1. Static OTP (low-security fallback)
@@ -37,13 +37,13 @@ export async function validateEventCheckin(
   // 2. TOTP (high-security rolling code)
   if (event.checkin_type === 'totp') {
     try {
-      const result = await verify({
+      const result = verify({
         secret: event.checkin_secret,
         token: trimmedCode,
-        // window: 1,   // That window closed
       });
 
-      if (result.valid) {
+      // otplib v13 verify() returns boolean directly
+      if (result === true) {
         return { success: true, message: 'Secure TOTP Verified' };
       }
       return { success: false, message: 'Code expired or invalid' };
@@ -71,14 +71,15 @@ export function generateEventSecret(type: 'totp' | 'static_otp'): string {
 /**
  * Generate the current TOTP token or return the static OTP.
  */
-export async function generateEventCode(
+export function generateEventCode(
   secret: string,
   type: 'totp' | 'static_otp'
-): Promise<string> {
+): string {
   if (type === 'static_otp') {
     return secret;
   }
-  return generate({ secret });
+  // generate() takes the secret string directly, not an options object
+  return generate(secret);
 }
 
 /**

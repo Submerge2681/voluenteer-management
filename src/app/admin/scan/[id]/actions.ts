@@ -34,6 +34,6 @@ export async function getCheckinCode(eventId: string): Promise<CheckinCodeResult
 
   if (!event) return null;
 
-  const code = await generateEventCode(event.checkin_secret, event.checkin_type);
+  const code = generateEventCode(event.checkin_secret, event.checkin_type);
   return { code, timeLeft: getTotpTimeRemaining(), type: event.checkin_type };
 }

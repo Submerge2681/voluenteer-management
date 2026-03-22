@@ -32,6 +32,10 @@ export async function updateEvent(id: string, formData: FormData) {
   const place = formData.get('place') as string;
   const place_url = formData.get('place_url') as string;
 
+  if (new Date(end_time) <= new Date(start_time)) {
+    return { error: 'End time must be after start time.' };
+  }
+
   let waste_kg: number | null = null;
   if (is_completed) {
     const wasteStr = formData.get('waste_kg') as string;
@@ -73,7 +77,8 @@ export async function updateEvent(id: string, formData: FormData) {
     return { error: "Failed to update event in database. " + updateError.message };
   }
 
-  revalidatePath('/events'); 
-  revalidatePath('/admin/events'); 
+  revalidatePath('/');
+  revalidatePath('/events');
+  revalidatePath('/admin/events');
   redirect(`/admin/events`);
 }

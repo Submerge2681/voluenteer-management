@@ -16,16 +16,21 @@ export async function processAndUploadImage(
   }
   
   if (!ALLOWED_MIME_TYPES.includes(file.type)) {
-    return { url: null, error: 'Invalid file type. Only JPEG, PNG, and WebP are allowed.' };
+    return { url: null, error: 'Invalid file type. Only JPEG, PNG, WebP, and HEIC are allowed.' };
   }
 
   // 2. Delete old image if provided (useful for Edit mode)
   if (oldImageUrl) {
     try {
       const urlObj = new URL(oldImageUrl);
-      const oldFilename = urlObj.pathname.split('/').pop();
-      if (oldFilename) {
-        await supabase.storage.from('event_thumbs').remove([oldFilename]);
+      // Extract the path after the bucket name to handle any subdirectory structure
+      const marker = '/event_thumbs/';
+      const markerIndex = urlObj.pathname.indexOf(marker);
+      const oldFilePath = markerIndex !== -1
+        ? urlObj.pathname.slice(markerIndex + marker.length)
+        : urlObj.pathname.split('/').pop();
+      if (oldFilePath) {
+        await supabase.storage.from('event_thumbs').remove([oldFilePath]);
       }
     } catch (e) {
       console.error("Failed to parse/delete old image", e);

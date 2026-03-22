@@ -1,6 +1,5 @@
 // src/app/(dashboard)/dashboard/actions.ts
 import { createClient } from '@/lib/supabase/server';
-import { unstable_cache } from 'next/cache';
 
 export interface EventRecord {
   event_id: string;
@@ -34,7 +33,6 @@ export interface DashboardData {
 }
 
 export async function getVolunteerData(userId: string): Promise<DashboardData> {
-  // Fetch outside cache: Supabase server client requires request-scoped cookies
   const supabase = await createClient();
 
   const [profileRes, participationRes] = await Promise.all([
@@ -65,27 +63,20 @@ export async function getVolunteerData(userId: string): Promise<DashboardData> {
       badge_url: row.events.badge_url ?? null,
     }));
 
-  // Cache only the pure computation, keyed per user
-  return unstable_cache(
-    async () => {
-      const totalHours = events.reduce((acc, e) => {
-        const diff = new Date(e.end_time).getTime() - new Date(e.start_time).getTime();
-        return acc + Math.max(0, diff / 3_600_000);
-      }, 0);
+  const totalHours = events.reduce((acc, e) => {
+    const diff = new Date(e.end_time).getTime() - new Date(e.start_time).getTime();
+    return acc + Math.max(0, diff / 3_600_000);
+  }, 0);
 
-      // Deduplicate badges by badge_url (one badge per award type)
-      const badges: Badge[] = events
-        .filter((e) => e.is_completed && e.badge_url)
-        .map((e) => ({ badge_url: e.badge_url!, event_title: e.title }))
-        .filter((b, i, arr) => arr.findIndex((x) => x.badge_url === b.badge_url) === i);
+  // Deduplicate badges by badge_url (one badge per award type)
+  const badges: Badge[] = events
+    .filter((e) => e.is_completed && e.badge_url)
+    .map((e) => ({ badge_url: e.badge_url!, event_title: e.title }))
+    .filter((b, i, arr) => arr.findIndex((x) => x.badge_url === b.badge_url) === i);
 
-      return {
-        profile: profileRes.data,
-        events,
-        stats: { count: events.length, totalHours: totalHours.toFixed(1), badges },
-      };
-    },
-    [`dashboard-stats-${userId}`],
-    { revalidate: 86400, tags: [`user-${userId}`] },
-  )();
+  return {
+    profile: profileRes.data,
+    events,
+    stats: { count: events.length, totalHours: totalHours.toFixed(1), badges },
+  };
 }

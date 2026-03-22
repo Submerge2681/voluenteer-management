@@ -74,7 +74,7 @@ export default async function EventsList({ searchParams }: PageProps) {
 
   let query = supabase
     .from('events')
-    .select('*', { count: 'exact' })
+    .select('id, title, body, start_time, location, is_completed, image_url, badge_url, event_type', { count: 'exact' })
     .eq('is_completed', status === 'completed')
     .order('start_time', { ascending: true })
     .range(from, to);

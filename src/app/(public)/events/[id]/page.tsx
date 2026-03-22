@@ -77,7 +77,7 @@ export default async function EventDetailsPage({ params }: { params: { id: strin
           
           <hr className='my-8'></hr>
 
-          <CountdownTimer targetDate={event.start_time} />
+          <CountdownTimer targetDate={event.start_time} endDate={event.end_time} />
 
           <ShareEventButtons 
             title={event.title}

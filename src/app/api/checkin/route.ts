@@ -57,7 +57,7 @@ async function processCheckin(
   }
 
   // 3. Validate OTP
-  const validation = await validateEventCheckin(otp, {
+  const validation = validateEventCheckin(otp, {
     checkin_type: event.checkin_type,
     checkin_secret: event.checkin_secret,
   });

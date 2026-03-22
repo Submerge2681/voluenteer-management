@@ -5,9 +5,10 @@ import { AlertCircle } from 'lucide-react';
 
 interface CountdownTimerProps {
   targetDate: string;
+  endDate?: string;
 }
 
-export default function CountdownTimer({ targetDate }: CountdownTimerProps) {
+export default function CountdownTimer({ targetDate, endDate }: CountdownTimerProps) {
   const [timeLeft, setTimeLeft] = useState({
     days: 0,
     hours: 0,
@@ -15,12 +16,21 @@ export default function CountdownTimer({ targetDate }: CountdownTimerProps) {
     seconds: 0,
   });
   const [isPast, setIsPast] = useState(false);
+  const [isCompleted, setIsCompleted] = useState(false);
 
   useEffect(() => {
     const targetTime = new Date(targetDate).getTime();
+    const endTime = endDate ? new Date(endDate).getTime() : null;
 
     const updateCountdown = () => {
       const now = Date.now();
+
+      if (endTime && now >= endTime) {
+        setIsCompleted(true);
+        setIsPast(true);
+        return;
+      }
+
       const difference = targetTime - now;
 
       if (difference <= 0) {
@@ -41,7 +51,18 @@ export default function CountdownTimer({ targetDate }: CountdownTimerProps) {
 
     const interval = setInterval(updateCountdown, 1000);
     return () => clearInterval(interval);
-  }, [targetDate]);
+  }, [targetDate, endDate]);
+
+  if (isCompleted) {
+    return (
+      <div className="bg-slate-50 border border-slate-200 rounded-2xl p-6 text-center">
+        <div className="flex items-center justify-center gap-2 text-slate-600 font-medium">
+          <AlertCircle className="w-5 h-5" />
+          Event has concluded
+        </div>
+      </div>
+    );
+  }
 
   if (isPast) {
     return (
