@@ -1,5 +1,5 @@
 // lib/totp.ts
-import { generateSecret, generate, verify } from 'otplib';
+import { generateSecret, generateSync, verifySync } from 'otplib';
 import { randomInt } from 'crypto';
 
 
@@ -37,13 +37,12 @@ export function validateEventCheckin(
   // 2. TOTP (high-security rolling code)
   if (event.checkin_type === 'totp') {
     try {
-      const result = verify({
+      const result = verifySync({
         secret: event.checkin_secret,
         token: trimmedCode,
       });
 
-      // otplib v13 verify() returns boolean directly
-      if (result === true) {
+      if (result.valid) {
         return { success: true, message: 'Secure TOTP Verified' };
       }
       return { success: false, message: 'Code expired or invalid' };
@@ -78,8 +77,7 @@ export function generateEventCode(
   if (type === 'static_otp') {
     return secret;
   }
-  // generate() takes the secret string directly, not an options object
-  return generate(secret);
+  return generateSync({ secret });
 }
 
 /**

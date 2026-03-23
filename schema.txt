@@ -1,556 +1,482 @@
+ -- ============================================================
+  -- STEP 1: ENUMS
+  -- Must come before any table that references them.
+  -- ============================================================
 
-profiles
-id: uuid (primary key, references auth.users.id)
-email: text
-full_name: text
-role: user_role (enum)
-phone: jsonb
-socials: jsonb
-locations: text[]
-is_cert_public: boolean
-last_active: timestamptz
-created_at: timestamptz
-
-participation
-user_id: uuid (foreign key to profiles.id)
-event_id: uuid (foreign key to events.id)
-
-events
-id: uuid (primary key)
-title: text
-body: text
-start_time: timestamptz
-is_completed: boolean
-badge_url: text
-checkin_type: checkin_method (enum)
-checkin_secret: text
-created_at: timestamptz
-location: text
-waste_kg: float8
-event_type: text
-image_url: text
-participants: int8
-end_time: timestamptz
-place: text
-place_url: text
-
-badges
-id: int8 (primary key)
-name: text
-url: text
-
-global_stats
-id: int4 (primary key)
-total_volunteers: int4
-total_waste: int4
-total_cleanups: int4
-last_updated: timestamptz
-
-rate_limits
-ip: text (primary key)
-window_start: timestamptz (primary key)
-count: int4
-
-Functions
-    check_rate_limit:
-        DECLARE
-        v_window  timestamptz;
-        v_count   integer;
-        BEGIN
-        -- Align to fixed window boundary
-        v_window := to_timestamp(
-            floor(extract(epoch FROM now()) / p_window_seconds) * p_window_seconds
-        );
-
-        INSERT INTO rate_limits (ip, window_start, count)
-        VALUES (p_ip, v_window, 1)
-        ON CONFLICT (ip, window_start)
-        DO UPDATE SET count = rate_limits.count + 1
-        RETURNING count INTO v_count;
-
-        RETURN v_count <= p_max_requests;
-        END;
-
-    cleanup_rate_limits:
-        DELETE FROM rate_limits
-        WHERE window_start < now() - older_than;
-
-    get_top_cities:
-        select
-            trim(location) as city,
-            -- Sum participants (handle nulls with coalesce)
-            sum(coalesce(participants, 0)) as participants
-        from events
-        where is_completed = true
-        group by 1
-        order by 2 desc
-        limit 5;
-
-    handle_new_user:
-        select
-            trim(location) as city,
-            -- Sum participants (handle nulls with coalesce)
-            sum(coalesce(participants, 0)) as participants
-        from events
-        where is_completed = true
-        group by 1
-        order by 2 desc
-        limit 5;
-
-    sync_event_participants:
-        declare
-        target_event_id uuid;
-        begin
-        if TG_OP = 'DELETE' then
-            target_event_id := OLD.event_id;
-        else
-            target_event_id := NEW.event_id;
-        end if;
-
-        update events
-        set participants = (
-            select count(*) from participation where event_id = target_event_id
-        )
-        where id = target_event_id;
-
-        return NEW;
-        end;
-
-Triggers
-    Name,Table,Function,Events,Orientation
-    trg_sync_participants,participation,sync_event_participants,(AFTER DELETE,AFTER INSERT),ROW
+  CREATE TYPE public.user_role     AS ENUM ('volunteer', 'admin', 'super_admin');
+  CREATE TYPE public.checkin_method AS ENUM ('totp', 'static_otp');
 
 
-Enumerated Types
-    Schema,Name,Values
-    public,user_role,(volunteer, admin, super_admin)
-    public,checkin_method,(totp, static_otp)
+  -- ============================================================
+  -- STEP 2: TABLES
+  -- Order matters: profiles before participation (FK), events before participation (FK).
+  -- ============================================================
 
-Database Indexes
-    Table,Columns,Name
-    badges,id,badges_pkey
-    events,id,events_pkey
-    global_stats,id,global_stats_pkey
-    participation,(user_id,event_id)participation_pkey
-    profiles,email,profiles_email_key
-    profiles,id,profiles_pkey
-    rate_limits,ip, window_start,rate_limits_pkey
-    rate_limits,window_start,rate_limits_window_start_idx
-
-Policies
-    badges
-        Enable read access for all users:
-            alter policy "Enable read access for all users"
-            on "public"."badges"
-            to public
-            using (
-            true
-            );
-
-    events
-        Admins can manage events
-            alter policy "Admins can manage events"
-            on "public"."events"
-            to public
-            using (
-            (EXISTS ( SELECT 1
-            FROM profiles
-            WHERE ((profiles.id = auth.uid()) AND (profiles.role = ANY (ARRAY['admin'::user_role, 'super_admin'::user_role])))))
-            );
-
-        Events are public
-            alter policy "Events are public"
-            on "public"."events"
-            to public
-            using (
-            true
-            );
-      global_stats
-        This table can be accessed by anyone via the Data API as RLS is disabled.
-
-      participation
-        alter policy "Admins can manage participation"
-        on "public"."participation"
-        to public
-        using (
-          (EXISTS ( SELECT 1
-          FROM profiles
-          WHERE ((profiles.id = auth.uid()) AND (profiles.role = ANY (ARRAY['admin'::user_role, 'super_admin'::user_role])))))
-        );
-
-        alter policy "Users can read own participation"
-        on "public"."participation"
-        to public
-        using (
-          (auth.uid() = user_id)
-        );
-
-      profiles
-        alter policy "Admins can manage all profiles"
-        on "public"."profiles"
-        to public
-        using (
-          (EXISTS ( SELECT 1
-          FROM profiles profiles_1
-          WHERE ((profiles_1.id = auth.uid()) AND (profiles_1.role = ANY (ARRAY['admin'::user_role, 'super_admin'::user_role])))))
-        );
-
-        alter policy "Public profiles are viewable by everyone"
-        on "public"."profiles"
-        to public
-        using (
-          (is_cert_public = true)
-        );
-
-        alter policy "Users can see own profile"
-        on "public"."profiles"
-        to anon
-        using (
-          (auth.uid() = id)
-        );
-
-        rate_limits
-          This table can be accessed via the Data API but no RLS policies exist so no data will be returned.
-
--- 1. ENUMS & TYPES
-create type user_role as enum ('volunteer', 'admin', 'super_admin');
-create type checkin_method as enum ('totp', 'static_otp');
-
--- 2. PROFILES (Extends Supabase Auth)
-create table profiles (
-  id uuid references auth.users on delete cascade not null primary key,
-  email text unique not null,
-  full_name text,
-  role user_role default 'volunteer'::user_role,
-  phone jsonb default '{"country_code": "+1", "number": ""}'::jsonb,
-  socials jsonb default '{}'::jsonb,
-  locations text[] default array[]::text[],
-  is_cert_public boolean default false,
-  last_active timestamptz,
-  created_at timestamptz default now()
-);
-
--- 3. EVENTS
-create table events (
-  id uuid default gen_random_uuid() primary key,
-  title text not null,
-  body text,
-  start_time timestamptz not null,
-  is_completed boolean default false,
-  badge_url text, -- URL to the badge image
-  checkin_type checkin_method default 'static_otp'::checkin_method,
-  checkin_secret text not null, -- Stores the Static code or the TOTP Secret
-  created_at timestamptz default now()
-);
-
--- 4. PARTICIPATION (Join Table)
-create table participation (
-  user_id uuid references profiles(id) on delete cascade,
-  event_id uuid references events(id) on delete cascade,
-  primary key (user_id, event_id)
-);
-
--- 5. GLOBAL STATS (For ISR caching / Performance)
-create table global_stats (
-  id int primary key default 1, -- Singleton row
-  total_volunteers int default 0,
-  total_impact_hours int default 0, -- or waste collected, etc.
-  last_updated timestamptz default now(),
-  constraint single_row check (id = 1)
-);
-
--- Insert initial stats row
-insert into global_stats (id, total_volunteers, total_impact_hours) values (1, 0, 0);
-
--- 6. RLS POLICIES (Security)
-alter table profiles enable row level security;
-alter table events enable row level security;
-alter table participation enable row level security;
-
--- Profiles: Users read own, Admins read all
-create policy "Public profiles are viewable by everyone"
-  on profiles for select using (is_cert_public = true);
-
-create policy "Users can read own profile"
-  on profiles for select using (auth.uid() = id);
-
-create policy "Admins can manage all profiles"
-  on profiles for all using (
-    exists (select 1 from profiles where id = auth.uid() and role in ('admin', 'super_admin'))
+  CREATE TABLE public.profiles (
+    id             uuid        REFERENCES auth.users ON DELETE CASCADE NOT NULL PRIMARY KEY,
+    email          text        UNIQUE NOT NULL,
+    full_name      text,
+    role           user_role   DEFAULT 'volunteer'::user_role,
+    phone          jsonb       DEFAULT '{"country_code": "+1", "number": ""}'::jsonb,
+    socials        jsonb       DEFAULT '{}'::jsonb,
+    locations      text[]      DEFAULT ARRAY[]::text[],
+    is_cert_public boolean     DEFAULT false,
+    last_active    timestamptz,
+    created_at     timestamptz DEFAULT now()
   );
 
--- Events: Public read, Admins write
-create policy "Events are public"
-  on events for select using (true);
-
-create policy "Admins can manage events"
-  on events for all using (
-    exists (select 1 from profiles where id = auth.uid() and role in ('admin', 'super_admin'))
+  CREATE TABLE public.events (
+    id             uuid            DEFAULT gen_random_uuid() PRIMARY KEY,
+    title          text            NOT NULL,
+    body           text,
+    start_time     timestamptz     NOT NULL,
+    end_time       timestamptz,
+    is_completed   boolean         DEFAULT false,
+    badge_url      text,
+    checkin_type   checkin_method  DEFAULT 'static_otp'::checkin_method,
+    checkin_secret text            NOT NULL,
+    created_at     timestamptz     DEFAULT now(),
+    location       text,
+    waste_kg       float8,
+    event_type     text,
+    image_url      text,
+    participants   int8,
+    place          text,
+    place_url      text
   );
 
--- Participation: Users read own, Admins read all
-create policy "Users can read own participation"
-  on participation for select using (auth.uid() = user_id);
-
-create policy "Admins can manage participation"
-  on participation for all using (
-    exists (select 1 from profiles where id = auth.uid() and role in ('admin', 'super_admin'))
+  CREATE TABLE public.participation (
+    user_id  uuid REFERENCES public.profiles(id) ON DELETE CASCADE,
+    event_id uuid REFERENCES public.events(id)   ON DELETE CASCADE,
+    PRIMARY KEY (user_id, event_id)
   );
 
--- 7. AUTO-CREATE PROFILE TRIGGER
-create function public.handle_new_user()
-returns trigger as $$
-begin
-  insert into public.profiles (id, email, full_name)
-  values (new.id, new.email, new.raw_user_meta_data->>'full_name');
-  return new;
-end;
-$$ language plpgsql security definer;
-
-create trigger on_auth_user_created
-  after insert on auth.users
-  for each row execute procedure public.handle_new_user();
-
-
-
-
-  -- 1. DROP EXISTING POLICIES (Clean Slate)
-drop policy if exists "Admins can manage all profiles" on profiles;
-drop policy if exists "Users can read own profile" on profiles;
-drop policy if exists "Public profiles are viewable by everyone" on profiles;
-
--- 2. CREATE A SECURE "IS_ADMIN" FUNCTION
--- "security definer" means this function runs with Superuser privileges,
--- bypassing RLS to safely check the role without recursion.
-create or replace function public.is_admin()
-returns boolean as $$
-begin
-  return exists (
-    select 1 from profiles
-    where id = auth.uid()
-    and role in ('admin', 'super_admin')
-  );
-end;
-$$ language plpgsql security definer;
-
--- 3. RE-APPLY POLICIES USING THE FUNCTION
-
--- Policy A: Everyone can see public certs (No change)
-create policy "Public profiles are viewable by everyone"
-  on profiles for select using (is_cert_public = true);
-
--- Policy B: Users can ALWAYS read/edit their own profile
--- This ensures you can always fetch your own 'role'
-create policy "Users can manage own profile"
-  on profiles for all using (auth.uid() = id);
-
--- Policy C: Admins can manage ALL profiles (Using the secure function)
-create policy "Admins can manage all profiles"
-  on profiles for all using (
-    public.is_admin() = true
+  CREATE TABLE public.badges (
+    id   int8 PRIMARY KEY,
+    name text,
+    url  text
   );
 
-CREATE OR REPLACE VIEW volunteer_history AS
-SELECT
-  p.user_id,
-  e.id AS event_id, -- This is the key we use now
-  e.title,
-  e.start_time,
-  e.end_time,
-  e.location,
-  e.event_type,
-  e.waste_kg,
-  e.is_completed
-FROM participation p
-JOIN events e ON p.event_id = e.id;
+  -- Singleton stats row for the landing page counters.
+  -- RLS intentionally left DISABLED — public read, server-only writes via triggers.
+  CREATE TABLE public.global_stats (
+    id               int4        PRIMARY KEY DEFAULT 1,
+    total_volunteers int4        DEFAULT 0,
+    total_waste      int4        DEFAULT 0,
+    total_cleanups   int4        DEFAULT 0,
+    last_updated     timestamptz DEFAULT now(),
+    CONSTRAINT single_row CHECK (id = 1)
+  );
+  INSERT INTO public.global_stats (id) VALUES (1);
 
-CREATE INDEX idx_events_start_time ON public.events(start_time);
-CREATE INDEX idx_events_title ON public.events(title);
+  -- RLS intentionally left DISABLED — only written by check_rate_limit() SECURITY DEFINER.
+  CREATE TABLE public.rate_limits (
+    ip           text        NOT NULL,
+    window_start timestamptz NOT NULL,
+    count        int4,
+    PRIMARY KEY (ip, window_start)
+  );
 
--- 1. Enable RLS on the table
-alter table public.badges enable row level security;
 
--- 2. Allow everyone (even anonymous if public) to VIEW badges
--- Or change 'true' to 'auth.role() = 'authenticated'' for logged-in users only
-create policy "Badges are viewable by everyone"
-on public.badges for select
-using (true);
+  -- ============================================================
+  -- STEP 3: INDEXES
+  -- ============================================================
 
--- 3. Only allow Super Admins to INSERT/UPDATE/DELETE
--- This assumes you have a 'profiles' table with a 'role' column
-create policy "Only super admins can modify badges"
-on public.badges for all
-using (
-  exists (
-    select 1 from public.profiles
-    where profiles.id = auth.uid()
-    and profiles.role = 'super_admin'
+  CREATE INDEX idx_events_start_time        ON public.events(start_time);
+  CREATE INDEX idx_events_title             ON public.events(title);
+  CREATE INDEX rate_limits_window_start_idx ON public.rate_limits(window_start);
+
+
+  -- ============================================================
+  -- STEP 4: FUNCTIONS
+  -- Must be created before triggers and policies that reference them.
+  -- is_admin() in particular must come before ANY policy that calls it.
+  -- ============================================================
+
+  -- ── is_admin() ──────────────────────────────────────────────
+  -- SECURITY DEFINER: runs as the function owner, bypassing RLS
+  -- on the profiles table. This breaks the recursive RLS chain
+  -- that occurs when an events/participation policy queries profiles
+  -- while profiles itself has RLS enabled.
+  --
+  -- SET search_path = public prevents search-path injection attacks,
+  -- which are the primary exploit vector for SECURITY DEFINER functions.
+  CREATE OR REPLACE FUNCTION public.is_admin()
+  RETURNS boolean
+  LANGUAGE plpgsql
+  SECURITY DEFINER
+  SET search_path = public
+  AS $$
+  BEGIN
+    RETURN EXISTS (
+      SELECT 1 FROM public.profiles
+      WHERE id = auth.uid()
+        AND role = ANY(ARRAY['admin'::user_role, 'super_admin'::user_role])
+    );
+  END;
+  $$;
+
+  -- ── handle_new_user() ───────────────────────────────────────
+  -- Fires on auth.users INSERT to create a matching profiles row.
+  -- SECURITY DEFINER so it can write to profiles regardless of RLS.
+  CREATE OR REPLACE FUNCTION public.handle_new_user()
+  RETURNS trigger
+  LANGUAGE plpgsql
+  SECURITY DEFINER
+  SET search_path = public
+  AS $$
+  BEGIN
+    INSERT INTO public.profiles (id, email, full_name)
+    VALUES (
+      NEW.id,
+      NEW.email,
+      NEW.raw_user_meta_data->>'full_name'
+    );
+    RETURN NEW;
+  END;
+  $$;
+
+  -- ── sync_event_participants() ────────────────────────────────
+  -- Keeps events.participants accurate by counting participation rows.
+  -- Called on participation INSERT/DELETE (row-level).
+  CREATE OR REPLACE FUNCTION public.sync_event_participants()
+  RETURNS trigger
+  LANGUAGE plpgsql
+  SECURITY DEFINER
+  SET search_path = public
+  AS $$
+  DECLARE
+    target_event_id uuid;
+  BEGIN
+    -- NEW is NULL for DELETE triggers; OLD is NULL for INSERT triggers.
+    -- Use COALESCE to handle both cases safely.
+    target_event_id := COALESCE(NEW.event_id, OLD.event_id);
+
+    UPDATE public.events
+    SET participants = (
+      SELECT count(*) FROM public.participation WHERE event_id = target_event_id
+    )
+    WHERE id = target_event_id;
+
+    RETURN NULL; -- Return value ignored for AFTER triggers
+  END;
+  $$;
+
+  -- ── sync_global_stats() ──────────────────────────────────────
+  -- Full recount of all three landing-page counters.
+  -- Called by statement-level triggers (fires once per statement,
+  -- not once per row) to avoid redundant recounts on bulk operations.
+  CREATE OR REPLACE FUNCTION public.sync_global_stats()
+  RETURNS void
+  LANGUAGE plpgsql
+  SECURITY DEFINER
+  SET search_path = public
+  AS $$
+  BEGIN
+    UPDATE public.global_stats SET
+      total_volunteers = (SELECT COUNT(DISTINCT user_id) FROM public.participation),
+      total_waste      = (SELECT COALESCE(SUM(waste_kg)::int, 0) FROM public.events WHERE
+  is_completed = true),
+      total_cleanups   = (SELECT COUNT(*) FROM public.events WHERE is_completed = true),
+      last_updated     = now()
+    WHERE id = 1;
+  END;
+  $$;
+
+  -- ── trg_fn_global_stats_participation() ─────────────────────
+  -- Statement-level wrapper: fires after any INSERT/DELETE on participation.
+  CREATE OR REPLACE FUNCTION public.trg_fn_global_stats_participation()
+  RETURNS trigger
+  LANGUAGE plpgsql
+  SECURITY DEFINER
+  SET search_path = public
+  AS $$
+  BEGIN
+    PERFORM public.sync_global_stats();
+    RETURN NULL;
+  END;
+  $$;
+
+  -- ── trg_fn_global_stats_events() ────────────────────────────
+  -- Statement-level wrapper for events changes.
+  -- Using EACH STATEMENT (not EACH ROW) avoids the OLD/NEW null-access
+  -- problem: on INSERT, OLD is NULL; on DELETE, NEW is NULL. A row-level
+  -- trigger accessing OLD.is_completed on INSERT causes a PL/pgSQL error.
+  -- Column-filter (UPDATE OF is_completed, waste_kg) keeps this efficient
+  -- — it only fires on UPDATEs that actually change the relevant columns.
+  CREATE OR REPLACE FUNCTION public.trg_fn_global_stats_events()
+  RETURNS trigger
+  LANGUAGE plpgsql
+  SECURITY DEFINER
+  SET search_path = public
+  AS $$
+  BEGIN
+    PERFORM public.sync_global_stats();
+    RETURN NULL;
+  END;
+  $$;
+
+  -- ── check_rate_limit() ───────────────────────────────────────
+  -- Fixed-window rate limiter. Called from the Next.js API route.
+  CREATE OR REPLACE FUNCTION public.check_rate_limit(
+    p_ip             text,
+    p_max_requests   int,
+    p_window_seconds int
   )
-);
+  RETURNS boolean
+  LANGUAGE plpgsql
+  SECURITY DEFINER
+  SET search_path = public
+  AS $$
+  DECLARE
+    v_window timestamptz;
+    v_count  integer;
+  BEGIN
+    v_window := to_timestamp(
+      floor(extract(epoch FROM now()) / p_window_seconds) * p_window_seconds
+    );
 
--- Paste this in Supabase SQL Editor
-create or replace function validate_checkin(p_event_id uuid, p_user_id uuid, p_token text)
-returns boolean
-language plpgsql
-security definer -- Runs with admin privileges to read the secret
-as $$
-declare
-  v_secret text;
-  v_verified boolean;
-begin
-  -- 1. Get the secret for this event
-  select totp_secret into v_secret from events where id = p_event_id;
+    INSERT INTO public.rate_limits (ip, window_start, count)
+    VALUES (p_ip, v_window, 1)
+    ON CONFLICT (ip, window_start)
+    DO UPDATE SET count = rate_limits.count + 1
+    RETURNING count INTO v_count;
 
-  -- 2. Verify Token
-  -- Note: Postgres doesn't have native TOTP libraries easily available.
-  -- SIMPLIFICATION FOR BEGINNERS:
-  -- In a real prod app, you'd use a Supabase Edge Function (Node.js) to verify.
-  -- For this MVP, we will assume if the code matches what passed in, it's okay.
-  -- To make this strictly secure, move the logic from 'app/checkin/[id]/page.tsx'
-  -- to a Supabase Edge Function which uses 'otplib'.
+    RETURN v_count <= p_max_requests;
+  END;
+  $$;
 
-  -- For now, we will simply log the participation
-  insert into participations (user_id, event_id, checkin_time)
-  values (p_user_id, p_event_id, now())
-  on conflict do nothing;
+  -- ── cleanup_rate_limits() ────────────────────────────────────
+  -- Housekeeping: delete stale rate-limit windows.
+  -- Call manually or via a Supabase cron job:
+  --   SELECT cleanup_rate_limits(interval '1 hour');
+  CREATE OR REPLACE FUNCTION public.cleanup_rate_limits(older_than interval)
+  RETURNS void
+  LANGUAGE plpgsql
+  SECURITY DEFINER
+  SET search_path = public
+  AS $$
+  BEGIN
+    DELETE FROM public.rate_limits
+    WHERE window_start < now() - older_than;
+  END;
+  $$;
 
-  return true;
-end;
-$$;
+  -- ── get_top_cities() ─────────────────────────────────────────
+  -- Used by the landing page chart via .rpc('get_top_cities').
+  CREATE OR REPLACE FUNCTION public.get_top_cities()
+  RETURNS TABLE(city text, participants bigint)
+  LANGUAGE sql
+  STABLE
+  SET search_path = public
+  AS $$
+    SELECT
+      trim(location)                 AS city,
+      sum(coalesce(participants, 0)) AS participants
+    FROM public.events
+    WHERE is_completed = true
+    GROUP BY 1
+    ORDER BY 2 DESC
+    LIMIT 5;
+  $$;
 
 
+  -- ============================================================
+  -- STEP 5: TRIGGERS
+  -- ============================================================
+
+  -- New Supabase user → create profile row
+  CREATE TRIGGER on_auth_user_created
+    AFTER INSERT ON auth.users
+    FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+
+  -- Keep events.participants in sync (row-level, needs to know which event)
+  CREATE TRIGGER trg_sync_participants
+    AFTER INSERT OR DELETE ON public.participation
+    FOR EACH ROW EXECUTE FUNCTION public.sync_event_participants();
+
+  -- Update global volunteer count when participation changes (statement-level)
+  CREATE TRIGGER trg_global_stats_participation
+    AFTER INSERT OR DELETE ON public.participation
+    FOR EACH STATEMENT EXECUTE FUNCTION public.trg_fn_global_stats_participation();
+
+  -- Update global waste/cleanup counts only when relevant columns change.
+  -- UPDATE OF is_completed, waste_kg ensures this doesn't fire on every
+  -- single event update (e.g. title edits, image changes).
+  CREATE TRIGGER trg_global_stats_events
+    AFTER INSERT OR UPDATE OF is_completed, waste_kg OR DELETE ON public.events
+    FOR EACH STATEMENT EXECUTE FUNCTION public.trg_fn_global_stats_events();
 
 
+  -- ============================================================
+  -- STEP 6: VIEWS
+  -- Created after tables so the underlying relations exist.
+  -- Both views inherit RLS from their underlying tables.
+  -- ============================================================
 
-  [
-  {
-    "table_name": "badges",
-    "table_type": "BASE TABLE"
-  },
-  {
-    "table_name": "events",
-    "table_type": "BASE TABLE"
-  },
-  {
-    "table_name": "global_stats",
-    "table_type": "BASE TABLE"
-  },
-  {
-    "table_name": "participation",
-    "table_type": "BASE TABLE"
-  },
-  {
-    "table_name": "profiles",
-    "table_type": "BASE TABLE"
-  },
-  {
-    "table_name": "rate_limits",
-    "table_type": "BASE TABLE"
-  },
-  {
-    "table_name": "checkin_list",
-    "table_type": "VIEW"
-  },
-  {
-    "table_name": "volunteer_history",
-    "table_type": "VIEW"
-  }
-]
+  -- Used by the volunteer certificate page (queried via createAdminClient,
+  -- which bypasses RLS, so the service role can see all rows).
+  CREATE OR REPLACE VIEW public.volunteer_history AS
+  SELECT
+    p.user_id,
+    e.id         AS event_id,
+    e.title,
+    e.start_time,
+    e.end_time,
+    e.location,
+    e.event_type,
+    e.waste_kg,
+    e.is_completed
+  FROM public.participation p
+  JOIN public.events e ON p.event_id = e.id;
 
-[
-  {
-    "tablename": "badges",
-    "policyname": "Enable read access for all users",
-    "permissive": "PERMISSIVE",
-    "roles": "{public}",
-    "applied_to_command": "SELECT",
-    "using_expression": "true",
-    "with_check_expression": null
-  },
-  {
-    "tablename": "events",
-    "policyname": "Admins can manage events",
-    "permissive": "PERMISSIVE",
-    "roles": "{public}",
-    "applied_to_command": "ALL",
-    "using_expression": "(EXISTS ( SELECT 1\n   FROM profiles\n  WHERE ((profiles.id = auth.uid()) AND (profiles.role = ANY (ARRAY['admin'::user_role, 'super_admin'::user_role])))))",
-    "with_check_expression": null
-  },
-  {
-    "tablename": "events",
-    "policyname": "Events are public",
-    "permissive": "PERMISSIVE",
-    "roles": "{public}",
-    "applied_to_command": "SELECT",
-    "using_expression": "true",
-    "with_check_expression": null
-  },
-  {
-    "tablename": "participation",
-    "policyname": "Admins can manage participation",
-    "permissive": "PERMISSIVE",
-    "roles": "{public}",
-    "applied_to_command": "ALL",
-    "using_expression": "(EXISTS ( SELECT 1\n   FROM profiles\n  WHERE ((profiles.id = auth.uid()) AND (profiles.role = ANY (ARRAY['admin'::user_role, 'super_admin'::user_role])))))",
-    "with_check_expression": null
-  },
-  {
-    "tablename": "participation",
-    "policyname": "Users can read own participation",
-    "permissive": "PERMISSIVE",
-    "roles": "{public}",
-    "applied_to_command": "SELECT",
-    "using_expression": "(auth.uid() = user_id)",
-    "with_check_expression": null
-  },
-  {
-    "tablename": "profiles",
-    "policyname": "Admins can manage all profiles",
-    "permissive": "PERMISSIVE",
-    "roles": "{public}",
-    "applied_to_command": "ALL",
-    "using_expression": "(EXISTS ( SELECT 1\n   FROM profiles profiles_1\n  WHERE ((profiles_1.id = auth.uid()) AND (profiles_1.role = ANY (ARRAY['admin'::user_role, 'super_admin'::user_role])))))",
-    "with_check_expression": null
-  },
-  {
-    "tablename": "profiles",
-    "policyname": "Public profiles are viewable by everyone",
-    "permissive": "PERMISSIVE",
-    "roles": "{public}",
-    "applied_to_command": "SELECT",
-    "using_expression": "(is_cert_public = true)",
-    "with_check_expression": null
-  },
-  {
-    "tablename": "profiles",
-    "policyname": "Users can see own profile",
-    "permissive": "PERMISSIVE",
-    "roles": "{anon}",
-    "applied_to_command": "SELECT",
-    "using_expression": "(auth.uid() = id)",
-    "with_check_expression": null
-  }
-]
+  -- Used by the admin scan page (CheckinList component).
+  -- Admins querying this view pass the is_admin() check on both
+  -- participation and profiles, so they see all rows.
+  CREATE OR REPLACE VIEW public.checkin_list AS
+  SELECT
+    p.event_id,
+    pr.full_name
+  FROM public.participation p
+  JOIN public.profiles pr ON p.user_id = pr.id;
 
-[
-  {
-    "routine_name": "handle_new_user",
-    "return_type": "trigger"
-  },
-  {
-    "routine_name": "get_top_cities",
-    "return_type": "record"
-  },
-  {
-    "routine_name": "sync_event_participants",
-    "return_type": "trigger"
-  },
-  {
-    "routine_name": "check_rate_limit",
-    "return_type": "boolean"
-  },
-  {
-    "routine_name": "cleanup_rate_limits",
-    "return_type": "void"
-  }
-]
+
+  -- ============================================================
+  -- STEP 7: ROW LEVEL SECURITY
+  -- Enable RLS, then add policies.
+  -- global_stats and rate_limits are intentionally left without RLS
+  -- (global_stats is public read; rate_limits is server-only via SECURITY DEFINER).
+  -- ============================================================
+
+  ALTER TABLE public.profiles     ENABLE ROW LEVEL SECURITY;
+  ALTER TABLE public.events        ENABLE ROW LEVEL SECURITY;
+  ALTER TABLE public.participation ENABLE ROW LEVEL SECURITY;
+  ALTER TABLE public.badges        ENABLE ROW LEVEL SECURITY;
+
+
+  -- ── profiles policies ────────────────────────────────────────
+
+  -- Anyone can read profiles where the user has opted into public certificates.
+  CREATE POLICY "Public profiles are viewable by everyone"
+    ON public.profiles
+    FOR SELECT
+    USING (is_cert_public = true);
+
+  -- Authenticated users can fully manage their own profile row.
+  -- WITH CHECK prevents a user from changing their own id to impersonate another.
+  -- Applied TO authenticated only — anon users have no auth.uid() so this
+  -- policy can never match for them (no point applying it to anon).
+  CREATE POLICY "Users can manage own profile"
+    ON public.profiles
+    FOR ALL
+    TO authenticated
+    USING     (auth.uid() = id)
+    WITH CHECK (auth.uid() = id);
+
+  -- Admins can manage all profiles.
+  -- Uses is_admin() (SECURITY DEFINER) instead of an inline EXISTS subquery
+  -- to avoid the recursive RLS chain: profiles policy → queries profiles
+  -- → triggers profiles RLS → queries profiles → infinite recursion.
+  CREATE POLICY "Admins can manage all profiles"
+    ON public.profiles
+    FOR ALL
+    USING (public.is_admin());
+
+
+  -- ── events policies ──────────────────────────────────────────
+
+  -- All events are publicly readable (no auth required).
+  -- This policy MUST exist — without it, unauthenticated queries return
+  -- zero rows even though the admin policy exists. The admin policy alone
+  -- is not enough for public visitors because auth.uid() is NULL for them.
+  CREATE POLICY "Events are public"
+    ON public.events
+    FOR SELECT
+    USING (true);
+
+  -- Admins can create, edit, and delete events.
+  -- Uses is_admin() to avoid the same RLS recursion described above.
+  CREATE POLICY "Admins can manage events"
+    ON public.events
+    FOR ALL
+    USING (public.is_admin());
+
+
+  -- ── participation policies ───────────────────────────────────
+
+  -- Users can read their own participation records.
+  CREATE POLICY "Users can read own participation"
+    ON public.participation
+    FOR SELECT
+    USING (auth.uid() = user_id);
+
+  -- Authenticated users can insert their own check-in record.
+  -- This was the critical missing policy: without it, the check-in API
+  -- insert was silently rejected by RLS for non-admin volunteers.
+  -- WITH CHECK (not USING) is correct here — INSERT has no existing row to filter.
+  CREATE POLICY "Users can insert own participation"
+    ON public.participation
+    FOR INSERT
+    TO authenticated
+    WITH CHECK (auth.uid() = user_id);
+
+  -- Admins can manage all participation (view, add, remove any record).
+  -- Uses is_admin() to avoid the RLS recursion chain.
+  CREATE POLICY "Admins can manage participation"
+    ON public.participation
+    FOR ALL
+    USING (public.is_admin());
+
+
+  -- ── badges policies ──────────────────────────────────────────
+
+  -- Anyone can view badges (shown on event cards and certificates).
+  CREATE POLICY "Badges are viewable by everyone"
+    ON public.badges
+    FOR SELECT
+    USING (true);
+
+  -- Only super admins can create or modify badges.
+  CREATE POLICY "Only super admins can modify badges"
+    ON public.badges
+    FOR ALL
+    USING (
+      EXISTS (
+        SELECT 1 FROM public.profiles
+        WHERE profiles.id = auth.uid()
+          AND profiles.role = 'super_admin'::user_role
+      )
+    );
+
+
+  -- ============================================================
+  -- STEP 8: SEED GLOBAL STATS FROM EXISTING DATA
+  -- If you imported row data before running this script, this
+  -- brings the counters up to date immediately.
+  -- If the tables are empty this is a safe no-op.
+  -- ============================================================
+
+  SELECT public.sync_global_stats();
+
+  ---
+  After running the SQL
+
+  Step 1 — Create the storage bucket (manual)
+  - Go to Storage → New bucket
+  - Name: event_thumbs
+  - Visibility: Public
+
+  Step 2 — Enable Email auth (manual)
+  - Go to Authentication → Providers → Email and ensure it matches your original project
+  settings
+
+  Step 3 — Update .env.local
+  NEXT_PUBLIC_SUPABASE_URL=https://YOUR_NEW_REF.supabase.co
+  NEXT_PUBLIC_SUPABASE_ANON_KEY=your-new-anon-key
+  SUPABASE_SERVICE_ROLE_KEY=your-new-service-role-key
+  CHECKIN_COOKIE_SECRET=generate-a-random-32-char-string
+  NEXT_PUBLIC_ORG_NAME=Your Org Name
+
+  Step 4 — Import data (optional)
+  If carrying over existing data, import CSVs in this order to satisfy foreign keys:
+  badges → profiles → events → participation
